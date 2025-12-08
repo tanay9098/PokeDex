@@ -4,7 +4,7 @@ import { Text, View } from "react-native";
 export default function Index() {
   const [pokemons, setPokemons] = useState(null);
   useEffect(() => {
-    console.log("PokeDex app loaded");
+    fetchPokemons();
   }, []);
 
   async function fetchPokemons() {
