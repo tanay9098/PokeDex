@@ -8,7 +8,7 @@ interface Pokemon {
 }
 
 export default function Index() {
-  const [pokemons, setPokemons] = useState([]);
+  const [pokemons, setPokemons] = useState<Pokemon[]>([]);;
   useEffect(() => {
     fetchPokemons();
   }, []);
