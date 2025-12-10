@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 
 export default function Index() {
-  const [pokemons, setPokemons] = useState(null);
+  const [pokemons, setPokemons] = useState([]);
   useEffect(() => {
     fetchPokemons();
   }, []);
@@ -14,21 +14,21 @@ export default function Index() {
 
       const data = await response.json();
 
-      setPokemons(data);
-      console.log(data);
-    } catch (error) {
-      console.error("Error fetching Pokemons:", error);
+      setPokemons(data.results);
+      console.log(data.results);
+    } catch (e) {
+      console.log(e);
     }
   }
   return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
-      <Text>PokeDex</Text>
-    </View>
+    <ScrollView>
+      {pokemons.map((pokemon) => (
+        <View key={pokemon.name}>
+          <Text>{pokemon.name}</Text>
+        </View>
+        ))}
+    
+    
+    </ScrollView>
   );
 }
