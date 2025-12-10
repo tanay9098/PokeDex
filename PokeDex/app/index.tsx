@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Image,ScrollView, Text, View } from "react-native";
 
 
 interface Pokemon {
   name: string;
-  url: string;
+  image: string;
 }
+
+
 
 export default function Index() {
   const [pokemons, setPokemons] = useState<Pokemon[]>([]);;
@@ -20,7 +22,7 @@ export default function Index() {
 
       const data = await response.json();
 
-      const detailedPokemons=await Promise.all(data.results.map(async (pokemon:Pokemon) => {
+      const detailedPokemons=await Promise.all(data.results.map(async (pokemon:any) => {
         const res = await fetch(pokemon.url);
         const details= await res.json();
         return{
@@ -31,7 +33,7 @@ export default function Index() {
       );
       console.log(detailedPokemons);
 
-      setPokemons(data.results);
+      setPokemons(detailedPokemons);
       console.log(data);
     } catch (e) {
       console.log(e);
@@ -42,6 +44,8 @@ export default function Index() {
       {pokemons.map((pokemon) => (
         <View key={pokemon.name}>
           <Text>{pokemon.name}</Text>
+          <Image source={{uri:pokemon.image}}
+          style={{width:100, height:100}}/>
         </View>
         ))}
     
