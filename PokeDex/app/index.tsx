@@ -17,7 +17,7 @@ export default function Index() {
 
   async function fetchPokemons() {
     try {
-      const response = await fetch("https://pokeapi.co/api/v2/pokemon?limit=10");
+      const response = await fetch(process.env.EXPO_PUBLIC_API_URL as string);
 
 
       const data = await response.json();
@@ -44,8 +44,15 @@ export default function Index() {
       {pokemons.map((pokemon) => (
         <View key={pokemon.name}>
           <Text>{pokemon.name}</Text>
-          <Image source={{uri:pokemon.image}}
-          style={{width:100, height:100}}/>
+          <View>
+            <Image source={{uri:pokemon.image}}
+          style={{width:150, height:150}}/>
+
+         
+
+
+          </View>
+          
         </View>
         ))}
     
