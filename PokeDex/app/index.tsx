@@ -66,7 +66,15 @@ export default function Index() {
   return (
     <ScrollView>
       {pokemons.map((pokemon) => (
-        <View key={pokemon.name}>
+        <View key={pokemon.name}
+        style={{
+          backgroundColor: colorsByType[pokemon.types[0].type.name as keyof typeof colorsByType] || '#A8A77A',
+          margin:10,
+          padding:10,
+          borderRadius:10,
+          alignItems:'center'
+        }}
+        >
           <Text style={styles.name}>{pokemon.name}</Text>
           <Text style={styles.type}>{pokemon.types[0].type.name}</Text>
 
