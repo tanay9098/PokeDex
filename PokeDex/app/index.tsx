@@ -71,7 +71,7 @@ export default function Index() {
           backgroundColor: colorsByType[pokemon.types[0].type.name as keyof typeof colorsByType] || '#A8A77A',
           margin:10,
           padding:10,
-          borderRadius:10,
+          borderRadius:20,
           alignItems:'center'
         }}
         >
@@ -98,7 +98,8 @@ export default function Index() {
 const styles = StyleSheet.create({
   name:{
     fontSize:20,
-    fontWeight:'bold'
+    fontWeight:'bold',
+    textAlign:'center',
 
   },
   type: {
@@ -106,5 +107,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginBottom: 8,
     textTransform: "capitalize",
+    textAlign:'center',
   },
 })
