@@ -5,7 +5,29 @@ import { Image,ScrollView, Text, View, StyleSheet } from "react-native";
 interface Pokemon {
   name: string;
   image: string;
+  types: PokemonType[];
 }
+
+interface PokemonType {
+  type: {
+    name: string;
+    url: string;
+  };
+}
+
+const colorsByType={
+  fire:'#F08030',
+  water:'#6890F0',
+  grass:'#78C850',
+  electric:'#F8D030',
+  psychic:'#F85888',
+  ice:'#98D8D8',
+  dragon:'#7038F8',
+  dark:'#705848',
+  fairy:'#EE99AC',
+}
+
+
 
 
 
@@ -28,6 +50,8 @@ export default function Index() {
         return{
           name: pokemon.name,
           image: details.sprites.front_default, 
+            types: details.types, // REQUIRED
+
         };
       })
       );
@@ -44,6 +68,8 @@ export default function Index() {
       {pokemons.map((pokemon) => (
         <View key={pokemon.name}>
           <Text style={styles.name}>{pokemon.name}</Text>
+          <Text style={styles.type}>{pokemon.types[0].type.name}</Text>
+
           <View>
             <Image source={{uri:pokemon.image}}
           style={{width:150, height:150}}/>
@@ -66,5 +92,11 @@ const styles = StyleSheet.create({
     fontSize:20,
     fontWeight:'bold'
 
-  }
+  },
+  type: {
+    fontSize: 14,
+    color: "#fff",
+    marginBottom: 8,
+    textTransform: "capitalize",
+  },
 })
