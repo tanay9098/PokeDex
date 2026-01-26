@@ -72,16 +72,17 @@ export default function Index() {
     }}>
       
       {pokemons.map((pokemon) => (
-        <Link key={pokemon.name} href={"/detailed"}>
-        <View key={pokemon.name}
+        <Link key={pokemon.name} href={"/detailed"}
+        
         style={{
           backgroundColor: colorsByType[pokemon.types[0].type.name as keyof typeof colorsByType] || '#A8A77A',
           margin:10,
           padding:10,
           borderRadius:20,
           alignItems:'center'
-        }}
-        >
+        }}>
+          <View>
+        
           <Text style={styles.name}>{pokemon.name}</Text>
           <Text style={styles.type}>{pokemon.types[0].type.name}</Text>
 
