@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Image,ScrollView, Text, View, StyleSheet } from "react-native";
+import { Image,ScrollView, Text, View, StyleSheet, Pressable } from "react-native";
 
 
 interface Pokemon {
@@ -64,8 +64,14 @@ export default function Index() {
     }
   }
   return (
-    <ScrollView>
+    <ScrollView contentContainerStyle={{
+      gap:16,
+      padding:16,
+      alignItems:'center'
+    }}>
+      
       {pokemons.map((pokemon) => (
+        <Pressable key={pokemon.name}>
         <View key={pokemon.name}
         style={{
           backgroundColor: colorsByType[pokemon.types[0].type.name as keyof typeof colorsByType] || '#A8A77A',
@@ -78,7 +84,7 @@ export default function Index() {
           <Text style={styles.name}>{pokemon.name}</Text>
           <Text style={styles.type}>{pokemon.types[0].type.name}</Text>
 
-          <View>
+          <View style={{flexDirection:'row', justifyContent:'center', alignItems:'center'}}>
             <Image source={{uri:pokemon.image}}
           style={{width:150, height:150}}/>
 
@@ -86,8 +92,9 @@ export default function Index() {
 
 
           </View>
+          </View>
           
-        </View>
+        </Pressable>
         ))}
     
     
