@@ -1,8 +1,8 @@
-
+import { useLocalSearchParams } from "expo-router";
 import { ScrollView, StyleSheet } from "react-native";
 
 
-
+import { useEffect } from "react";
 
 
 
@@ -10,6 +10,27 @@ import { ScrollView, StyleSheet } from "react-native";
 
 
 export default function Details() {
+
+  const params=useLocalSearchParams();
+
+  console.log(params.name);
+
+  useEffect(() => {
+    
+  }, []);
+
+  async function fetchPokemonDetails() {
+    try{
+      const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${params.name}`);
+      const data = await response.json();
+      console.log(data);
+    } 
+    catch(e){
+      console.error(e);
+    }
+
+   
+  }
   
   return (
     <ScrollView
