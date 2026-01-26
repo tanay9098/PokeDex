@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Image,ScrollView, Text, View, StyleSheet, Pressable } from "react-native";
-
+import { Image,ScrollView, Text, View, StyleSheet } from "react-native";
+import Details from "./detailed";
+import { Link } from "expo-router";
 
 interface Pokemon {
   name: string;
@@ -71,7 +72,7 @@ export default function Index() {
     }}>
       
       {pokemons.map((pokemon) => (
-        <Pressable key={pokemon.name}>
+        <Link key={pokemon.name} href={"/detailed"}>
         <View key={pokemon.name}
         style={{
           backgroundColor: colorsByType[pokemon.types[0].type.name as keyof typeof colorsByType] || '#A8A77A',
@@ -94,7 +95,7 @@ export default function Index() {
           </View>
           </View>
           
-        </Pressable>
+        </Link>
         ))}
     
     

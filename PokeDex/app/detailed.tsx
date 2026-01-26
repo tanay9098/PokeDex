@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Image,ScrollView, Text, View, StyleSheet } from "react-native";
+
+import { ScrollView, StyleSheet } from "react-native";
 
 
 
@@ -26,6 +26,4 @@ export default function Details() {
   );
 }
 
-const styles = StyleSheet.create({
-  
-})
+const styles = StyleSheet.create({})
