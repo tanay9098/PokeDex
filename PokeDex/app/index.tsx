@@ -33,7 +33,7 @@ const colorsByType={
 
 
 export default function Index() {
-  const [pokemons, setPokemons] = useState<Pokemon[]>([]);;
+  const [pokemons, setPokemons] = useState<Pokemon[]>([]);
   useEffect(() => {
     fetchPokemons();
   }, []);

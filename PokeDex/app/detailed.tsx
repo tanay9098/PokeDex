@@ -21,7 +21,7 @@ export default function Details() {
 
   async function fetchPokemonDetails() {
     try{
-      const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${params.name}`);
+      const response = await fetch(process.env.EXPO_PUBLIC_API_URL as string);
       const data = await response.json();
       console.log(data);
     } 
@@ -47,4 +47,18 @@ export default function Details() {
   );
 }
 
-const styles = StyleSheet.create({})
+const styles = StyleSheet.create({
+  name:{
+    fontSize:20,
+    fontWeight:'bold',
+    textAlign:'center',
+
+  },
+  type: {
+    fontSize: 14,
+    color: "#fff",
+    marginBottom: 8,
+    textTransform: "capitalize",
+    textAlign:'center',
+  },
+})
