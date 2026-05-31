@@ -1,0 +1,40 @@
+{
+  "name": "pokedex-blockchain",
+  "version": "1.0.0",
+  "description": "Pokemon NFT Marketplace on Polygon",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview",
+    "hardhat:compile": "hardhat compile",
+    "hardhat:test": "hardhat test",
+    "hardhat:deploy:testnet": "hardhat run scripts/deployTestnet.ts --network polygonMumbai",
+    "hardhat:deploy:mainnet": "hardhat run scripts/deploy.ts --network polygonMainnet"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "ethers": "^6.0.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^3.0.0",
+    "@nomiclabs/hardhat-etherscan": "^3.1.0",
+    "@openzeppelin/contracts": "^5.0.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@typescript-eslint/eslint-plugin": "7.18.0",
+    "@typescript-eslint/parser": "7.18.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "chai": "^4.3.0",
+    "dotenv": "^16.0.0",
+    "eslint": "8.57.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.0",
+    "ethers": "^6.0.0",
+    "hardhat": "^2.19.0",
+    "typescript": "^5.9.0",
+    "vite": "^5.0.0"
+  }
+}
