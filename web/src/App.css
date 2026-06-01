@@ -4,12 +4,82 @@
   padding: 2rem;
 }
 
+.app-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.web3-status {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.status-badge {
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.status-badge.loading {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.status-badge.error {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.status-badge.success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.badge-pill {
+  background-color: rgba(255, 255, 255, 0.3);
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 12px;
+}
+
+.retry-btn {
+  padding: 0.5rem 1rem;
+  background-color: currentColor;
+  color: inherit;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.retry-btn:hover {
+  opacity: 1;
+}
+
 .container {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
   justify-content: center;
   padding: 16px;
+  min-height: 200px;
+}
+
+.pokemon-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+  width: 100%;
 }
 
 .pokemon-card {
@@ -21,6 +91,12 @@
   width: 180px;
   cursor: pointer;
   text-decoration: none;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.pokemon-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
 }
 
 .pokemon-name {
@@ -43,4 +119,36 @@
   width: 150px;
   height: 150px;
   object-fit: contain;
+}
+
+.loading-state,
+.error-state,
+.empty-state {
+  width: 100%;
+  text-align: center;
+  padding: 2rem;
+  border-radius: 8px;
+}
+
+.loading-state {
+  background-color: #f5f5f5;
+  color: #333;
+  font-size: 16px;
+}
+
+.error-state {
+  background-color: #ffebee;
+  color: #c62828;
+  border: 1px solid #ef5350;
+}
+
+.empty-state {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #66bb6a;
+}
+
+.error-state p,
+.empty-state p {
+  margin: 0 0 1rem 0;
 }
