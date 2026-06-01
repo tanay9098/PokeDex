@@ -5,7 +5,6 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
 
 /**
  * @title PokemonNFT
@@ -13,9 +12,7 @@ import "@openzeppelin/contracts/utils/Counters.sol";
  * Each Pokémon card is a unique NFT that can be collected, traded, and battled
  */
 contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
-    using Counters for Counters.Counter;
-
-    Counters.Counter private _tokenIdCounter;
+    uint256 private _tokenIdCounter;
 
     // Struct to store Pokemon metadata
     struct PokemonCard {
@@ -79,10 +76,10 @@ contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
         bool completed;
     }
 
-    Counters.Counter private _battleIdCounter;
+    uint256 private _battleIdCounter;
     mapping(uint256 => Battle) public battles;
 
-    constructor() ERC721("PokemonNFT", "PKMN") {}
+    constructor() ERC721("PokemonNFT", "PKMN") Ownable(msg.sender) {}
 
     /**
      * @dev Mint a new Pokemon NFT
@@ -121,8 +118,8 @@ contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
         uint256 rarity,
         string memory ipfsHash
     ) public onlyOwner returns (uint256) {
-        uint256 tokenId = _tokenIdCounter.current();
-        _tokenIdCounter.increment();
+        uint256 tokenId = _tokenIdCounter;
+        _tokenIdCounter++;
 
         PokemonCard memory card = PokemonCard({
             pokemonId: pokemonId,
@@ -206,8 +203,8 @@ contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
         require(ownerOf(pokemon1TokenId) == msg.sender, "You don't own Pokemon 1");
         require(ownerOf(pokemon2TokenId) == player2, "Player2 doesn't own Pokemon 2");
 
-        uint256 battleId = _battleIdCounter.current();
-        _battleIdCounter.increment();
+        uint256 battleId = _battleIdCounter;
+        _battleIdCounter++;
 
         battles[battleId] = Battle({
             battleId: battleId,

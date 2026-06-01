@@ -2,17 +2,14 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
 
 /**
  * @title PokemonMarketplace
  * @dev Marketplace for trading Pokemon NFTs on Polygon
  */
 contract PokemonMarketplace is ReentrancyGuard, Ownable {
-    using Counters for Counters.Counter;
-
     IERC721 public pokemonNFT;
 
     uint256 public platformFee = 25; // 2.5% fee
@@ -39,7 +36,7 @@ contract PokemonMarketplace is ReentrancyGuard, Ownable {
     // Token ID => Offer ID => Offer
     mapping(uint256 => mapping(uint256 => Offer)) public offers;
 
-    Counters.Counter private _offerIdCounter;
+    uint256 private _offerIdCounter;
 
     event ListingCreated(
         uint256 indexed tokenId,
@@ -75,7 +72,7 @@ contract PokemonMarketplace is ReentrancyGuard, Ownable {
         address indexed offerer
     );
 
-    constructor(address _pokemonNFT, address _feeRecipient) {
+    constructor(address _pokemonNFT, address _feeRecipient) Ownable(msg.sender) {
         pokemonNFT = IERC721(_pokemonNFT);
         feeRecipient = _feeRecipient;
     }
@@ -147,8 +144,8 @@ contract PokemonMarketplace is ReentrancyGuard, Ownable {
         require(msg.value > 0, "Offer amount must be greater than 0");
         require(expiresAt > block.timestamp, "Expiry time must be in the future");
 
-        uint256 offerId = _offerIdCounter.current();
-        _offerIdCounter.increment();
+        uint256 offerId = _offerIdCounter;
+        _offerIdCounter++;
 
         offers[tokenId][offerId] = Offer({
             offerer: msg.sender,
