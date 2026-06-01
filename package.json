@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "hardhat:compile": "hardhat compile",
     "hardhat:test": "hardhat test",
-    "hardhat:deploy:testnet": "hardhat run scripts/deployTestnet.ts --network polygonMumbai",
+    "hardhat:deploy:testnet": "hardhat run scripts/deployTestnet.ts --network polygonAmoy",
     "hardhat:deploy:mainnet": "hardhat run scripts/deploy.ts --network polygonMainnet"
   },
   "dependencies": {
@@ -20,7 +20,6 @@
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^3.0.0",
-    "@nomiclabs/hardhat-etherscan": "^3.1.0",
     "@openzeppelin/contracts": "^5.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
