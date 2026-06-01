@@ -15,10 +15,10 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {},
-    polygonMumbai: {
-      url: process.env.POLYGON_MUMBAI_RPC_URL || "",
+    polygonAmoy: {
+      url: process.env.POLYGON_AMOY_RPC_URL || "https://rpc-amoy.polygon.technology",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      chainId: 80001,
+      chainId: 80002,
     },
     polygonMainnet: {
       url: process.env.POLYGON_MAINNET_RPC_URL || "",
@@ -28,7 +28,7 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: {
-      polygonMumbai: process.env.POLYGONSCAN_API_KEY || "",
+      polygonAmoy: process.env.POLYGONSCAN_API_KEY || "",
       polygon: process.env.POLYGONSCAN_API_KEY || "",
     },
   },

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 async function main() {
-  console.log('Starting deployment to Polygon Mumbai Testnet...');
+  console.log('Starting deployment to Polygon Amoy Testnet...');
 
   const network = await ethers.provider.getNetwork();
   console.log('Deploying to network:', network.name, 'Chain ID:', network.chainId);
