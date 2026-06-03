@@ -28,7 +28,7 @@ async function main() {
     pokemonNFT: pokemonNFTAddress,
     marketplace: marketplaceAddress,
     network: network.name,
-    chainId: network.chainId,
+    chainId: network.chainId.toString(),
     deployer: (await ethers.getSigners())[0].address,
     deployedAt: new Date().toISOString(),
   };
