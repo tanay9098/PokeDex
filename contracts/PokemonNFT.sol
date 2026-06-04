@@ -14,6 +14,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
     uint256 private _tokenIdCounter;
 
+    // Rarity tier mint caps (0 = unlimited)
+    // rarity 1=common, 2=uncommon, 3=rare, 4=epic, 5=legendary
+    mapping(uint256 => uint256) public rarityMintCap;
+    mapping(uint256 => uint256) public rarityMintCount;
+
     // Struct to store Pokemon metadata
     struct PokemonCard {
         uint256 pokemonId;        // PokéAPI ID
@@ -65,6 +70,22 @@ contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
         address player2
     );
 
+    event BattleCompleted(
+        uint256 indexed battleId,
+        address indexed winner,
+        uint256 winnerTokenId,
+        uint256 loserTokenId,
+        uint256 winnerTotalStats,
+        uint256 loserTotalStats
+    );
+
+    event BattleRewardEarned(
+        uint256 indexed battleId,
+        address indexed winner,
+        uint256 rewardAmount,
+        uint256 rarityBonus
+    );
+
     // Battle tracking
     struct Battle {
         uint256 battleId;
@@ -79,7 +100,18 @@ contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
     uint256 private _battleIdCounter;
     mapping(uint256 => Battle) public battles;
 
-    constructor() ERC721("PokemonNFT", "PKMN") Ownable(msg.sender) {}
+    // Leaderboard tracking
+    mapping(address => uint256) public battleWins;
+    mapping(address => uint256) public battleLosses;
+
+    constructor() ERC721("PokemonNFT", "PKMN") Ownable(msg.sender) {
+        // Default rarity caps: legendary=100, epic=500, rare=2000, uncommon=10000, common=unlimited
+        rarityMintCap[5] = 100;
+        rarityMintCap[4] = 500;
+        rarityMintCap[3] = 2000;
+        rarityMintCap[2] = 10000;
+        rarityMintCap[1] = 0; // unlimited
+    }
 
     /**
      * @dev Mint a new Pokemon NFT
@@ -100,6 +132,11 @@ contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
      * @param rarity Rarity level (1-5)
      * @param ipfsHash IPFS hash for artwork
      */
+    function setRarityMintCap(uint256 rarity, uint256 cap) public onlyOwner {
+        require(rarity >= 1 && rarity <= 5, "Invalid rarity");
+        rarityMintCap[rarity] = cap;
+    }
+
     function mintPokemon(
         address to,
         uint256 pokemonId,
@@ -118,8 +155,15 @@ contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
         uint256 rarity,
         string memory ipfsHash
     ) public onlyOwner returns (uint256) {
+        require(rarity >= 1 && rarity <= 5, "Invalid rarity");
+        uint256 cap = rarityMintCap[rarity];
+        if (cap > 0) {
+            require(rarityMintCount[rarity] < cap, "Rarity tier mint cap reached");
+        }
+
         uint256 tokenId = _tokenIdCounter;
         _tokenIdCounter++;
+        rarityMintCount[rarity]++;
 
         PokemonCard memory card = PokemonCard({
             pokemonId: pokemonId,
@@ -222,18 +266,51 @@ contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
     }
 
     /**
-     * @dev Determine battle winner based on stats
-     * Calculates total stats for each Pokemon and determines winner
+     * @dev Resolve battle autonomously based on total stats — no owner required.
+     * Either player can call this to finalize the result deterministically.
      */
-    function completeBattle(uint256 battleId, address winner) public onlyOwner {
-        require(!battles[battleId].completed, "Battle already completed");
+    function completeBattle(uint256 battleId) public {
+        Battle storage battle = battles[battleId];
+        require(!battle.completed, "Battle already completed");
         require(
-            winner == battles[battleId].player1 || winner == battles[battleId].player2,
-            "Invalid winner"
+            msg.sender == battle.player1 || msg.sender == battle.player2,
+            "Not a battle participant"
         );
 
-        battles[battleId].winner = winner;
-        battles[battleId].completed = true;
+        uint256 stats1 = calculateTotalStats(battle.pokemon1TokenId);
+        uint256 stats2 = calculateTotalStats(battle.pokemon2TokenId);
+
+        address winner;
+        uint256 winnerTokenId;
+        uint256 loserTokenId;
+        uint256 winnerStats;
+        uint256 loserStats;
+
+        if (stats1 >= stats2) {
+            winner = battle.player1;
+            winnerTokenId = battle.pokemon1TokenId;
+            loserTokenId = battle.pokemon2TokenId;
+            winnerStats = stats1;
+            loserStats = stats2;
+        } else {
+            winner = battle.player2;
+            winnerTokenId = battle.pokemon2TokenId;
+            loserTokenId = battle.pokemon1TokenId;
+            winnerStats = stats2;
+            loserStats = stats1;
+        }
+
+        battle.winner = winner;
+        battle.completed = true;
+
+        address loser = (winner == battle.player1) ? battle.player2 : battle.player1;
+        battleWins[winner]++;
+        battleLosses[loser]++;
+
+        uint256 rarityBonus = pokemonCards[winnerTokenId].rarity;
+
+        emit BattleCompleted(battleId, winner, winnerTokenId, loserTokenId, winnerStats, loserStats);
+        emit BattleRewardEarned(battleId, winner, winnerStats, rarityBonus);
     }
 
     /**
