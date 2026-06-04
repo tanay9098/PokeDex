@@ -8,18 +8,20 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title PokemonNFT
- * @dev NFT contract for Pokémon cards backed by PokéAPI data on Polygon
- * Each Pokémon card is a unique NFT that can be collected, traded, and battled
+ * @dev NFT contract for Pokémon cards backed by PokéAPI data on Polygon.
+ * Supports ability-based battle modifiers stored as basis points (100 = 1.0×).
  */
 contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
     uint256 private _tokenIdCounter;
 
     // Rarity tier mint caps (0 = unlimited)
-    // rarity 1=common, 2=uncommon, 3=rare, 4=epic, 5=legendary
     mapping(uint256 => uint256) public rarityMintCap;
     mapping(uint256 => uint256) public rarityMintCount;
 
-    // Struct to store Pokemon metadata
+    // Ability battle modifiers in basis points: 100 = 1.0×, 130 = 1.3×
+    // Keyed by PokéAPI ability ID
+    mapping(uint256 => uint256) public abilityBattleModifier;
+
     struct PokemonCard {
         uint256 pokemonId;        // PokéAPI ID
         string name;
@@ -35,58 +37,22 @@ contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
         uint256 spDef;
         uint256 speed;
         uint256 rarity;           // 1-5 (1=common, 5=legendary)
+        uint256 abilityId;        // Primary PokéAPI ability ID for battle modifier
         uint256 mintedAt;
-        string ipfsHash;          // IPFS hash for artwork
+        string ipfsHash;
     }
 
-    // Mapping from token ID to Pokemon card data
     mapping(uint256 => PokemonCard) public pokemonCards;
-
-    // Mapping from Pokemon ID to array of token IDs (for tracking multiple copies)
     mapping(uint256 => uint256[]) public pokemonTokenIds;
 
-    // Trading events
-    event PokemonMinted(
-        uint256 indexed tokenId,
-        address indexed owner,
-        uint256 pokemonId,
-        string name,
-        uint256 rarity
-    );
-
+    event PokemonMinted(uint256 indexed tokenId, address indexed owner, uint256 pokemonId, string name, uint256 rarity);
     event PokemonListed(uint256 indexed tokenId, address indexed owner, uint256 price);
-    event PokemonTraded(
-        uint256 indexed tokenId,
-        address indexed from,
-        address indexed to,
-        uint256 price
-    );
+    event PokemonTraded(uint256 indexed tokenId, address indexed from, address indexed to, uint256 price);
+    event BattleCreated(uint256 indexed battleId, uint256 indexed pokemon1TokenId, uint256 indexed pokemon2TokenId, address player1, address player2);
+    event BattleCompleted(uint256 indexed battleId, address indexed winner, uint256 winnerTokenId, uint256 loserTokenId, uint256 winnerScore, uint256 loserScore);
+    event BattleRewardEarned(uint256 indexed battleId, address indexed winner, uint256 rewardAmount, uint256 rarityBonus);
+    event AbilityModifierSet(uint256 indexed abilityId, uint256 modifierBasisPoints);
 
-    event PokemonBattleCreated(
-        uint256 indexed battleId,
-        uint256 indexed pokemon1TokenId,
-        uint256 indexed pokemon2TokenId,
-        address player1,
-        address player2
-    );
-
-    event BattleCompleted(
-        uint256 indexed battleId,
-        address indexed winner,
-        uint256 winnerTokenId,
-        uint256 loserTokenId,
-        uint256 winnerTotalStats,
-        uint256 loserTotalStats
-    );
-
-    event BattleRewardEarned(
-        uint256 indexed battleId,
-        address indexed winner,
-        uint256 rewardAmount,
-        uint256 rarityBonus
-    );
-
-    // Battle tracking
     struct Battle {
         uint256 battleId;
         uint256 pokemon1TokenId;
@@ -99,42 +65,40 @@ contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
 
     uint256 private _battleIdCounter;
     mapping(uint256 => Battle) public battles;
-
-    // Leaderboard tracking
     mapping(address => uint256) public battleWins;
     mapping(address => uint256) public battleLosses;
 
     constructor() ERC721("PokemonNFT", "PKMN") Ownable(msg.sender) {
-        // Default rarity caps: legendary=100, epic=500, rare=2000, uncommon=10000, common=unlimited
         rarityMintCap[5] = 100;
         rarityMintCap[4] = 500;
         rarityMintCap[3] = 2000;
         rarityMintCap[2] = 10000;
-        rarityMintCap[1] = 0; // unlimited
+        rarityMintCap[1] = 0;
+
+        // Seed common ability modifiers (PokéAPI ability IDs)
+        // 1=stench(no bonus), 6=damp, 19=battle-armor(+10%), 32=swift-swim(+15%), 65=overgrow(+30%), 66=blaze(+30%), 67=torrent(+30%)
+        abilityBattleModifier[65] = 130;  // overgrow: 1.3×
+        abilityBattleModifier[66] = 130;  // blaze:    1.3×
+        abilityBattleModifier[67] = 130;  // torrent:  1.3×
+        abilityBattleModifier[19] = 110;  // battle-armor: 1.1×
+        abilityBattleModifier[32] = 115;  // swift-swim:   1.15×
+        abilityBattleModifier[45] = 125;  // huge-power:   1.25×
+        abilityBattleModifier[91] = 140;  // chlorophyll:  1.4×
     }
 
-    /**
-     * @dev Mint a new Pokemon NFT
-     * @param to Address to mint to
-     * @param pokemonId PokéAPI Pokemon ID
-     * @param name Pokemon name
-     * @param species Pokemon species
-     * @param baseExperience Base experience value
-     * @param height Pokemon height
-     * @param weight Pokemon weight
-     * @param types Array of Pokemon types
-     * @param hp HP stat
-     * @param attack Attack stat
-     * @param defense Defense stat
-     * @param spAtk Special Attack stat
-     * @param spDef Special Defense stat
-     * @param speed Speed stat
-     * @param rarity Rarity level (1-5)
-     * @param ipfsHash IPFS hash for artwork
-     */
     function setRarityMintCap(uint256 rarity, uint256 cap) public onlyOwner {
         require(rarity >= 1 && rarity <= 5, "Invalid rarity");
         rarityMintCap[rarity] = cap;
+    }
+
+    /**
+     * @dev Set the battle modifier for a PokéAPI ability ID.
+     * @param modifierBasisPoints 100 = 1.0×, 150 = 1.5×, etc.
+     */
+    function setAbilityModifier(uint256 abilityId, uint256 modifierBasisPoints) public onlyOwner {
+        require(modifierBasisPoints >= 50 && modifierBasisPoints <= 300, "Modifier out of range");
+        abilityBattleModifier[abilityId] = modifierBasisPoints;
+        emit AbilityModifierSet(abilityId, modifierBasisPoints);
     }
 
     function mintPokemon(
@@ -153,6 +117,7 @@ contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
         uint256 spDef,
         uint256 speed,
         uint256 rarity,
+        uint256 abilityId,
         string memory ipfsHash
     ) public onlyOwner returns (uint256) {
         require(rarity >= 1 && rarity <= 5, "Invalid rarity");
@@ -161,11 +126,10 @@ contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
             require(rarityMintCount[rarity] < cap, "Rarity tier mint cap reached");
         }
 
-        uint256 tokenId = _tokenIdCounter;
-        _tokenIdCounter++;
+        uint256 tokenId = _tokenIdCounter++;
         rarityMintCount[rarity]++;
 
-        PokemonCard memory card = PokemonCard({
+        pokemonCards[tokenId] = PokemonCard({
             pokemonId: pokemonId,
             name: name,
             species: species,
@@ -180,76 +144,42 @@ contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
             spDef: spDef,
             speed: speed,
             rarity: rarity,
+            abilityId: abilityId,
             mintedAt: block.timestamp,
             ipfsHash: ipfsHash
         });
 
-        pokemonCards[tokenId] = card;
         pokemonTokenIds[pokemonId].push(tokenId);
-
         _safeMint(to, tokenId);
         _setTokenURI(tokenId, ipfsHash);
 
         emit PokemonMinted(tokenId, to, pokemonId, name, rarity);
-
         return tokenId;
     }
 
-    /**
-     * @dev Get Pokemon card details
-     */
-    function getPokemonCard(uint256 tokenId)
-        public
-        view
-        returns (PokemonCard memory)
-    {
+    function getPokemonCard(uint256 tokenId) public view returns (PokemonCard memory) {
         require(_ownerOf(tokenId) != address(0), "Token does not exist");
         return pokemonCards[tokenId];
     }
 
-    /**
-     * @dev Get all token IDs for a specific Pokemon
-     */
-    function getPokemonTokenIds(uint256 pokemonId)
-        public
-        view
-        returns (uint256[] memory)
-    {
+    function getPokemonTokenIds(uint256 pokemonId) public view returns (uint256[] memory) {
         return pokemonTokenIds[pokemonId];
     }
 
-    /**
-     * @dev Get user's Pokemon collection
-     */
-    function getUserCollection(address user)
-        public
-        view
-        returns (uint256[] memory)
-    {
+    function getUserCollection(address user) public view returns (uint256[] memory) {
         uint256 balance = balanceOf(user);
         uint256[] memory tokenIds = new uint256[](balance);
-
         for (uint256 i = 0; i < balance; i++) {
             tokenIds[i] = tokenOfOwnerByIndex(user, i);
         }
-
         return tokenIds;
     }
 
-    /**
-     * @dev Initiate a Pokemon battle
-     */
-    function initiateBattle(
-        uint256 pokemon1TokenId,
-        uint256 pokemon2TokenId,
-        address player2
-    ) public returns (uint256) {
+    function initiateBattle(uint256 pokemon1TokenId, uint256 pokemon2TokenId, address player2) public returns (uint256) {
         require(ownerOf(pokemon1TokenId) == msg.sender, "You don't own Pokemon 1");
         require(ownerOf(pokemon2TokenId) == player2, "Player2 doesn't own Pokemon 2");
 
-        uint256 battleId = _battleIdCounter;
-        _battleIdCounter++;
-
+        uint256 battleId = _battleIdCounter++;
         battles[battleId] = Battle({
             battleId: battleId,
             pokemon1TokenId: pokemon1TokenId,
@@ -260,44 +190,34 @@ contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
             completed: false
         });
 
-        emit PokemonBattleCreated(battleId, pokemon1TokenId, pokemon2TokenId, msg.sender, player2);
-
+        emit BattleCreated(battleId, pokemon1TokenId, pokemon2TokenId, msg.sender, player2);
         return battleId;
     }
 
     /**
-     * @dev Resolve battle autonomously based on total stats — no owner required.
-     * Either player can call this to finalize the result deterministically.
+     * @dev Resolve battle using total stats × ability modifier.
+     * Score = totalStats × abilityModifier / 100 (where default modifier is 100 = 1.0×).
      */
     function completeBattle(uint256 battleId) public {
         Battle storage battle = battles[battleId];
         require(!battle.completed, "Battle already completed");
-        require(
-            msg.sender == battle.player1 || msg.sender == battle.player2,
-            "Not a battle participant"
-        );
+        require(msg.sender == battle.player1 || msg.sender == battle.player2, "Not a participant");
 
-        uint256 stats1 = calculateTotalStats(battle.pokemon1TokenId);
-        uint256 stats2 = calculateTotalStats(battle.pokemon2TokenId);
+        uint256 score1 = _calcBattleScore(battle.pokemon1TokenId);
+        uint256 score2 = _calcBattleScore(battle.pokemon2TokenId);
 
         address winner;
         uint256 winnerTokenId;
         uint256 loserTokenId;
-        uint256 winnerStats;
-        uint256 loserStats;
 
-        if (stats1 >= stats2) {
+        if (score1 >= score2) {
             winner = battle.player1;
             winnerTokenId = battle.pokemon1TokenId;
             loserTokenId = battle.pokemon2TokenId;
-            winnerStats = stats1;
-            loserStats = stats2;
         } else {
             winner = battle.player2;
             winnerTokenId = battle.pokemon2TokenId;
             loserTokenId = battle.pokemon1TokenId;
-            winnerStats = stats2;
-            loserStats = stats1;
         }
 
         battle.winner = winner;
@@ -308,66 +228,49 @@ contract PokemonNFT is ERC721, ERC721URIStorage, ERC721Enumerable, Ownable {
         battleLosses[loser]++;
 
         uint256 rarityBonus = pokemonCards[winnerTokenId].rarity;
-
-        emit BattleCompleted(battleId, winner, winnerTokenId, loserTokenId, winnerStats, loserStats);
-        emit BattleRewardEarned(battleId, winner, winnerStats, rarityBonus);
+        emit BattleCompleted(battleId, winner, winnerTokenId, loserTokenId, score1, score2);
+        emit BattleRewardEarned(battleId, winner, score1 > score2 ? score1 : score2, rarityBonus);
     }
 
     /**
-     * @dev Get battle details
+     * @dev Calculate battle score: totalStats × abilityModifier / 100.
      */
-    function getBattle(uint256 battleId) public view returns (Battle memory) {
-        return battles[battleId];
+    function _calcBattleScore(uint256 tokenId) internal view returns (uint256) {
+        PokemonCard storage card = pokemonCards[tokenId];
+        uint256 total = card.hp + card.attack + card.defense + card.spAtk + card.spDef + card.speed;
+        uint256 mod = abilityBattleModifier[card.abilityId];
+        if (mod == 0) mod = 100; // default 1.0×
+        return (total * mod) / 100;
     }
 
-    /**
-     * @dev Calculate Pokemon's total stats
-     */
     function calculateTotalStats(uint256 tokenId) public view returns (uint256) {
         PokemonCard memory card = pokemonCards[tokenId];
         return card.hp + card.attack + card.defense + card.spAtk + card.spDef + card.speed;
     }
 
-    /**
-     * @dev Transfer Pokemon NFT
-     */
+    function getBattle(uint256 battleId) public view returns (Battle memory) {
+        return battles[battleId];
+    }
+
     function transferPokemon(address to, uint256 tokenId) public {
         safeTransferFrom(msg.sender, to, tokenId);
         emit PokemonTraded(tokenId, msg.sender, to, 0);
     }
 
-    // Required overrides for ERC721 extensions
-
-    function _update(
-        address to,
-        uint256 tokenId,
-        address auth
-    ) internal override(ERC721, ERC721Enumerable) returns (address) {
+    // Required overrides
+    function _update(address to, uint256 tokenId, address auth) internal override(ERC721, ERC721Enumerable) returns (address) {
         return super._update(to, tokenId, auth);
     }
 
-    function _increaseBalance(address account, uint128 value)
-        internal
-        override(ERC721, ERC721Enumerable)
-    {
+    function _increaseBalance(address account, uint128 value) internal override(ERC721, ERC721Enumerable) {
         super._increaseBalance(account, value);
     }
 
-    function tokenURI(uint256 tokenId)
-        public
-        view
-        override(ERC721, ERC721URIStorage)
-        returns (string memory)
-    {
+    function tokenURI(uint256 tokenId) public view override(ERC721, ERC721URIStorage) returns (string memory) {
         return super.tokenURI(tokenId);
     }
 
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        override(ERC721, ERC721URIStorage, ERC721Enumerable)
-        returns (bool)
-    {
+    function supportsInterface(bytes4 interfaceId) public view override(ERC721, ERC721URIStorage, ERC721Enumerable) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 }
