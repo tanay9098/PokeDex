@@ -2,12 +2,14 @@
 pragma solidity ^0.8.25;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/interfaces/IERC2981.sol";
+import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title PokemonMarketplace
- * @dev Marketplace for trading Pokemon NFTs on Polygon
+ * @dev Marketplace for trading Pokemon NFTs on Polygon with ERC2981 royalty enforcement
  */
 contract PokemonMarketplace is ReentrancyGuard, Ownable {
     IERC721 public pokemonNFT;
@@ -72,6 +74,12 @@ contract PokemonMarketplace is ReentrancyGuard, Ownable {
         address indexed offerer
     );
 
+    event RoyaltyPaid(
+        uint256 indexed tokenId,
+        address indexed receiver,
+        uint256 amount
+    );
+
     constructor(address _pokemonNFT, address _feeRecipient) Ownable(msg.sender) {
         pokemonNFT = IERC721(_pokemonNFT);
         feeRecipient = _feeRecipient;
@@ -107,16 +115,29 @@ contract PokemonMarketplace is ReentrancyGuard, Ownable {
     }
 
     /**
-     * @dev Buy listed Pokemon
+     * @dev Buy listed Pokemon — enforces ERC2981 royalties on every secondary sale
      */
     function buyPokemon(uint256 tokenId) public payable nonReentrant {
         Listing memory listing = listings[tokenId];
         require(listing.active, "Pokemon is not for sale");
         require(msg.value == listing.price, "Incorrect payment amount");
 
-        // Calculate fee
+        // Calculate platform fee
         uint256 fee = (listing.price * platformFee) / feeDenominator;
-        uint256 sellerAmount = listing.price - fee;
+        uint256 remaining = listing.price - fee;
+
+        // Calculate and pay ERC2981 royalty if supported
+        uint256 royaltyAmount = 0;
+        if (IERC165(address(pokemonNFT)).supportsInterface(type(IERC2981).interfaceId)) {
+            (address royaltyReceiver, uint256 royalty) = IERC2981(address(pokemonNFT)).royaltyInfo(tokenId, listing.price);
+            if (royalty > 0 && royaltyReceiver != address(0) && royalty <= remaining) {
+                royaltyAmount = royalty;
+                remaining -= royaltyAmount;
+                (bool royaltySuccess, ) = payable(royaltyReceiver).call{value: royaltyAmount}("");
+                require(royaltySuccess, "Royalty payment failed");
+                emit RoyaltyPaid(tokenId, royaltyReceiver, royaltyAmount);
+            }
+        }
 
         // Update listing
         listings[tokenId].active = false;
@@ -125,7 +146,7 @@ contract PokemonMarketplace is ReentrancyGuard, Ownable {
         pokemonNFT.transferFrom(listing.seller, msg.sender, tokenId);
 
         // Transfer payments
-        (bool success, ) = payable(listing.seller).call{value: sellerAmount}("");
+        (bool success, ) = payable(listing.seller).call{value: remaining}("");
         require(success, "Payment to seller failed");
 
         (bool feeSuccess, ) = payable(feeRecipient).call{value: fee}("");
@@ -158,7 +179,7 @@ contract PokemonMarketplace is ReentrancyGuard, Ownable {
     }
 
     /**
-     * @dev Accept an offer
+     * @dev Accept an offer — enforces ERC2981 royalties
      */
     function acceptOffer(uint256 tokenId, uint256 offerId) public nonReentrant {
         require(pokemonNFT.ownerOf(tokenId) == msg.sender, "You don't own this Pokemon");
@@ -167,9 +188,20 @@ contract PokemonMarketplace is ReentrancyGuard, Ownable {
         require(offer.active, "Offer is not active");
         require(offer.expiresAt > block.timestamp, "Offer has expired");
 
-        // Calculate fee
+        // Calculate platform fee
         uint256 fee = (offer.amount * platformFee) / feeDenominator;
-        uint256 sellerAmount = offer.amount - fee;
+        uint256 remaining = offer.amount - fee;
+
+        // Calculate and pay ERC2981 royalty if supported
+        if (IERC165(address(pokemonNFT)).supportsInterface(type(IERC2981).interfaceId)) {
+            (address royaltyReceiver, uint256 royalty) = IERC2981(address(pokemonNFT)).royaltyInfo(tokenId, offer.amount);
+            if (royalty > 0 && royaltyReceiver != address(0) && royalty <= remaining) {
+                remaining -= royalty;
+                (bool royaltySuccess, ) = payable(royaltyReceiver).call{value: royalty}("");
+                require(royaltySuccess, "Royalty payment failed");
+                emit RoyaltyPaid(tokenId, royaltyReceiver, royalty);
+            }
+        }
 
         // Update offer
         offers[tokenId][offerId].active = false;
@@ -178,7 +210,7 @@ contract PokemonMarketplace is ReentrancyGuard, Ownable {
         pokemonNFT.transferFrom(msg.sender, offer.offerer, tokenId);
 
         // Transfer payments
-        (bool success, ) = payable(msg.sender).call{value: sellerAmount}("");
+        (bool success, ) = payable(msg.sender).call{value: remaining}("");
         require(success, "Payment to seller failed");
 
         (bool feeSuccess, ) = payable(feeRecipient).call{value: fee}("");
