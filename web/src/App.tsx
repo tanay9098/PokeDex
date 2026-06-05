@@ -328,7 +328,7 @@ export default function App() {
     }
 
     // Deployer wallet receives the purchase price (MATIC returns to you)
-    const DEPLOYER_ADDRESS = '0x11b3eb6DaE506837ef1d5Cc7Bb3F896AbE854838'
+    const DEPLOYER_ADDRESS = ethers.getAddress('0x11b3eb6dae506837ef1d5cc7bb3f896abe854838')
 
     const price = getMockPrice(pokemon.rarity)
     const priceInWei = ethers.parseEther(price)
