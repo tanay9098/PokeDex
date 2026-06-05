@@ -327,11 +327,8 @@ export default function App() {
       return
     }
 
-    const MARKETPLACE_ADDRESS = '0x225E3dB2d27846eef2A5bfBf6202dd37178634A7'
-    const MARKETPLACE_ABI = [
-      'function buyPokemon(uint256 tokenId) public payable',
-      'function getListing(uint256 tokenId) public view returns (tuple(address seller, uint256 price, bool active))',
-    ]
+    // Deployer wallet receives the purchase price (MATIC returns to you)
+    const DEPLOYER_ADDRESS = '0x11b3eb6DaE506837ef1d5Cc7Bb3F896AbE854838'
 
     const price = getMockPrice(pokemon.rarity)
     const priceInWei = ethers.parseEther(price)
@@ -341,15 +338,7 @@ export default function App() {
       const provider = new ethers.BrowserProvider((window as any).ethereum)
       const signer = await provider.getSigner()
 
-      const marketplace = new ethers.Contract(MARKETPLACE_ADDRESS, MARKETPLACE_ABI, signer)
-
-      const listing = await marketplace.getListing(pokemon.pokemonId)
-      if (!listing.active) {
-        alert(`${pokemon.displayName} is not listed for sale on the marketplace yet.`)
-        return
-      }
-
-      const tx = await marketplace.buyPokemon(pokemon.pokemonId, { value: listing.price })
+      const tx = await signer.sendTransaction({ to: DEPLOYER_ADDRESS, value: priceInWei })
       await tx.wait()
 
       const newOwned = new Set(ownedPokemonIds)
