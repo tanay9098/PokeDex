@@ -335,6 +335,33 @@ export default function App() {
 
     try {
       setBuyingPokemonId(pokemon.pokemonId)
+
+      // Ensure wallet is on Polygon Amoy testnet (chainId 80002)
+      const currentChainId = await (window as any).ethereum.request({ method: 'eth_chainId' })
+      if (currentChainId !== '0x13882') {
+        try {
+          await (window as any).ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x13882' }],
+          })
+        } catch (switchErr: any) {
+          if (switchErr.code === 4902) {
+            await (window as any).ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0x13882',
+                chainName: 'Polygon Amoy Testnet',
+                rpcUrls: ['https://rpc-amoy.polygon.technology'],
+                nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
+                blockExplorerUrls: ['https://amoy.polygonscan.com'],
+              }],
+            })
+          } else {
+            throw switchErr
+          }
+        }
+      }
+
       const provider = new ethers.BrowserProvider((window as any).ethereum)
       const signer = await provider.getSigner()
 
