@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Link } from "expo-router";
+import { getOwnedIds } from "./marketplace";
 
 interface PokemonItem {
   pokemonId: number;
@@ -28,26 +30,19 @@ function calcRarity(total: number, exp: number) {
   if (s > 700) return 5; if (s > 560) return 4; if (s > 440) return 3; if (s > 320) return 2; return 1;
 }
 
-async function loadCollection(): Promise<PokemonItem[]> {
-  const res = await fetch('https://pokeapi.co/api/v2/pokemon?limit=20&offset=0');
-  const data = await res.json();
-  const results = await Promise.allSettled(
-    data.results.map(async (p: { url: string }) => {
-      const d = await (await fetch(p.url)).json();
-      const sm: Record<string, number> = {};
-      d.stats.forEach((s: any) => { sm[s.stat.name] = s.base_stat; });
-      const stats = { hp: sm.hp || 0, attack: sm.attack || 0, defense: sm.defense || 0, spAtk: sm['special-attack'] || 0, spDef: sm['special-defense'] || 0, speed: sm.speed || 0 };
-      const total = Object.values(stats).reduce((a, b) => a + b, 0);
-      return {
-        pokemonId: d.id, name: d.name, displayName: d.name.replace(/-/g, ' '),
-        types: d.types.map((t: any) => t.type.name),
-        officialArtworkUrl: d.sprites.other?.['official-artwork']?.front_default || `https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/other/official-artwork/${d.id}.png`,
-        imageUrl: d.sprites.front_default,
-        stats, rarity: calcRarity(total, d.base_experience),
-      };
-    })
-  );
-  return results.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<PokemonItem>).value);
+async function fetchPokemonById(id: number): Promise<PokemonItem> {
+  const d = await (await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`)).json();
+  const sm: Record<string, number> = {};
+  d.stats.forEach((s: any) => { sm[s.stat.name] = s.base_stat; });
+  const stats = { hp: sm.hp || 0, attack: sm.attack || 0, defense: sm.defense || 0, spAtk: sm['special-attack'] || 0, spDef: sm['special-defense'] || 0, speed: sm.speed || 0 };
+  const total = Object.values(stats).reduce((a, b) => a + b, 0);
+  return {
+    pokemonId: d.id, name: d.name, displayName: d.name.replace(/-/g, ' '),
+    types: d.types.map((t: any) => t.type.name),
+    officialArtworkUrl: d.sprites.other?.['official-artwork']?.front_default || `https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/other/official-artwork/${d.id}.png`,
+    imageUrl: d.sprites.front_default,
+    stats, rarity: calcRarity(total, d.base_experience),
+  };
 }
 
 function CollectionCard({ item }: { item: PokemonItem }) {
@@ -103,18 +98,36 @@ export default function CollectionScreen() {
   const [items, setItems] = useState<PokemonItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadCollection().then(data => { setItems(data); setLoading(false); }).catch(() => setLoading(false));
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadOwned();
+    }, [])
+  );
+
+  async function loadOwned() {
+    setLoading(true);
+    try {
+      const ownedIds = await getOwnedIds();
+      if (ownedIds.size === 0) {
+        setItems([]);
+        return;
+      }
+      const results = await Promise.allSettled([...ownedIds].map(fetchPokemonById));
+      setItems(results.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<PokemonItem>).value));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const rareCount = items.filter(i => i.rarity >= 4).length;
-  const totalStats = items.reduce((sum, i) => sum + Object.values(i.stats).reduce((a, b) => a + b, 0), 0);
+  const avgStats = items.length > 0
+    ? Math.round(items.reduce((sum, i) => sum + Object.values(i.stats).reduce((a, b) => a + b, 0), 0) / items.length)
+    : 0;
 
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#6366f1" /></View>;
 
   return (
     <View style={styles.container}>
-      {/* Stats header */}
       <View style={styles.statsHeader}>
         <View style={styles.statCard}>
           <Text style={styles.statCardValue}>{items.length}</Text>
@@ -125,28 +138,30 @@ export default function CollectionScreen() {
           <Text style={styles.statCardLabel}>Rare+</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={[styles.statCardValue, { color: '#22c55e' }]}>{Math.round(totalStats / items.length)}</Text>
+          <Text style={[styles.statCardValue, { color: '#22c55e' }]}>{avgStats}</Text>
           <Text style={styles.statCardLabel}>Avg Stats</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={[styles.statCardValue, { color: '#6366f1' }]}>0</Text>
+          <Text style={[styles.statCardValue, { color: '#6366f1' }]}>{items.length}</Text>
           <Text style={styles.statCardLabel}>Owned NFTs</Text>
         </View>
       </View>
 
-      {/* Wallet notice */}
-      <View style={styles.walletNotice}>
-        <Text style={styles.walletNoticeText}>🔗 Connect wallet to view your owned NFTs on Polygon</Text>
-      </View>
-
-      <FlatList
-        data={items}
-        keyExtractor={i => String(i.pokemonId)}
-        numColumns={2}
-        contentContainerStyle={styles.grid}
-        columnWrapperStyle={styles.gridRow}
-        renderItem={({ item }) => <CollectionCard item={item} />}
-      />
+      {items.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>No Pokémon Yet</Text>
+          <Text style={styles.emptySubtitle}>Head to the Marketplace to buy your first Pokémon!</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={items}
+          keyExtractor={i => String(i.pokemonId)}
+          numColumns={2}
+          contentContainerStyle={styles.grid}
+          columnWrapperStyle={styles.gridRow}
+          renderItem={({ item }) => <CollectionCard item={item} />}
+        />
+      )}
     </View>
   );
 }
@@ -154,12 +169,13 @@ export default function CollectionScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#080b14' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#080b14' },
-  statsHeader: { flexDirection: 'row', gap: 8, padding: 12, paddingBottom: 0 },
+  statsHeader: { flexDirection: 'row', gap: 8, padding: 12, paddingBottom: 8 },
   statCard: { flex: 1, backgroundColor: '#111827', borderRadius: 12, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   statCardValue: { fontSize: 20, fontWeight: '800', color: '#f1f5f9' },
   statCardLabel: { fontSize: 9, color: '#475569', fontWeight: '700', textTransform: 'uppercase', marginTop: 2 },
-  walletNotice: { margin: 12, marginBottom: 4, backgroundColor: 'rgba(99,102,241,0.1)', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: 'rgba(99,102,241,0.3)' },
-  walletNoticeText: { color: '#a5b4fc', fontSize: 12, textAlign: 'center' },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#f1f5f9', marginBottom: 8 },
+  emptySubtitle: { fontSize: 14, color: '#475569', textAlign: 'center' },
   grid: { padding: 12, gap: 12 },
   gridRow: { gap: 12 },
   card: { flex: 1, backgroundColor: '#111827', borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', maxWidth: '49%' },
