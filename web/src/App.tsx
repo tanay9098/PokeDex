@@ -343,21 +343,13 @@ export default function App() {
 
       const marketplace = new ethers.Contract(MARKETPLACE_ADDRESS, MARKETPLACE_ABI, signer)
 
-      // Check if there is an active listing; fall back to direct transfer if not
-      let tx
-      try {
-        const listing = await marketplace.getListing(pokemon.pokemonId)
-        if (listing.active) {
-          tx = await marketplace.buyPokemon(pokemon.pokemonId, { value: listing.price })
-        } else {
-          // No active listing — send MATIC to the marketplace contract as payment
-          tx = await signer.sendTransaction({ to: MARKETPLACE_ADDRESS, value: priceInWei })
-        }
-      } catch {
-        // Contract call failed (e.g. listing doesn't exist yet) — direct transfer
-        tx = await signer.sendTransaction({ to: MARKETPLACE_ADDRESS, value: priceInWei })
+      const listing = await marketplace.getListing(pokemon.pokemonId)
+      if (!listing.active) {
+        alert(`${pokemon.displayName} is not listed for sale on the marketplace yet.`)
+        return
       }
 
+      const tx = await marketplace.buyPokemon(pokemon.pokemonId, { value: listing.price })
       await tx.wait()
 
       const newOwned = new Set(ownedPokemonIds)
