@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { ethers } from 'ethers'
 import './App.css'
 import {
   fetchPokemonList,
@@ -56,11 +57,13 @@ function PokemonNFTCard({
   onClick,
   onBuy,
   showBuy = true,
+  isBuying = false,
 }: {
   pokemon: PokemonListItem
   onClick: (p: PokemonListItem) => void
   onBuy?: (p: PokemonListItem) => void
   showBuy?: boolean
+  isBuying?: boolean
 }) {
   const price = getMockPrice(pokemon.rarity)
   const rarityColor = getRarityColor(pokemon.rarity)
@@ -113,7 +116,9 @@ function PokemonNFTCard({
         {showBuy && (
           <div className="nft-card-actions" onClick={(e) => e.stopPropagation()}>
             <button className="nft-btn-ghost">View History</button>
-            <button className="nft-btn-primary" onClick={() => onBuy?.(pokemon)}>Buy Now</button>
+            <button className="nft-btn-primary" onClick={() => onBuy?.(pokemon)} disabled={isBuying}>
+              {isBuying ? 'Buying...' : 'Buy Now'}
+            </button>
           </div>
         )}
       </div>
@@ -269,6 +274,13 @@ export default function App() {
   })
   const [battleSelectedItem, setBattleSelectedItem] = useState<PokemonListItem | null>(null)
   const [battleLoading, setBattleLoading] = useState(false)
+  const [buyingPokemonId, setBuyingPokemonId] = useState<number | null>(null)
+  const [ownedPokemonIds, setOwnedPokemonIds] = useState<Set<number>>(() => {
+    try {
+      const stored = localStorage.getItem('ownedPokemonIds')
+      return stored ? new Set<number>(JSON.parse(stored)) : new Set<number>()
+    } catch { return new Set<number>() }
+  })
 
   useEffect(() => {
     loadPokemons(0)
@@ -306,6 +318,50 @@ export default function App() {
       } catch {}
     } else {
       alert('Please install MetaMask to connect your wallet')
+    }
+  }
+
+  async function handleBuyPokemon(pokemon: PokemonListItem) {
+    if (!walletAddress) {
+      alert('Please connect your wallet first')
+      return
+    }
+
+    const treasuryAddress = (import.meta as any).env?.VITE_TREASURY_ADDRESS
+    if (!treasuryAddress || treasuryAddress === '0x0000000000000000000000000000000000000000') {
+      alert('Treasury address not configured. Set VITE_TREASURY_ADDRESS in your .env file.')
+      return
+    }
+
+    const price = getMockPrice(pokemon.rarity)
+    const priceInWei = ethers.parseEther(price)
+
+    try {
+      setBuyingPokemonId(pokemon.pokemonId)
+      const provider = new ethers.BrowserProvider((window as any).ethereum)
+      const signer = await provider.getSigner()
+
+      const tx = await signer.sendTransaction({
+        to: treasuryAddress,
+        value: priceInWei,
+      })
+
+      await tx.wait()
+
+      const newOwned = new Set(ownedPokemonIds)
+      newOwned.add(pokemon.pokemonId)
+      setOwnedPokemonIds(newOwned)
+      localStorage.setItem('ownedPokemonIds', JSON.stringify([...newOwned]))
+
+      alert(`Successfully purchased ${pokemon.displayName} for ${price} MATIC! Tx: ${tx.hash}`)
+    } catch (err: any) {
+      if (err.code === 4001 || err.info?.error?.code === 4001) {
+        alert('Transaction cancelled')
+      } else {
+        alert(`Purchase failed: ${err.message || 'Unknown error'}`)
+      }
+    } finally {
+      setBuyingPokemonId(null)
     }
   }
 
@@ -543,7 +599,8 @@ export default function App() {
                         key={p.pokemonId}
                         pokemon={p}
                         onClick={openModal}
-                        onBuy={() => { alert(`Would buy ${p.displayName} for ${getMockPrice(p.rarity)} MATIC`) }}
+                        onBuy={handleBuyPokemon}
+                        isBuying={buyingPokemonId === p.pokemonId}
                       />
                     ))}
                   </div>
@@ -589,7 +646,8 @@ export default function App() {
                     key={p.pokemonId}
                     pokemon={p}
                     onClick={openModal}
-                    onBuy={() => { alert(`Would buy ${p.displayName} for ${getMockPrice(p.rarity)} MATIC`) }}
+                    onBuy={handleBuyPokemon}
+                    isBuying={buyingPokemonId === p.pokemonId}
                   />
                 ))}
               </div>
@@ -770,7 +828,7 @@ export default function App() {
                     <span className="collection-stat-label">Rare+</span>
                   </div>
                   <div className="collection-stat">
-                    <span className="collection-stat-value">{walletAddress ? '12' : '0'}</span>
+                    <span className="collection-stat-value">{walletAddress ? ownedPokemonIds.size : '0'}</span>
                     <span className="collection-stat-label">Owned NFTs</span>
                   </div>
                 </div>
@@ -781,16 +839,24 @@ export default function App() {
                   <button className="wallet-btn" style={{ marginLeft: 'auto' }} onClick={connectWallet}>Connect Wallet</button>
                 </div>
               )}
-              <div className="pokemon-grid">
-                {filteredPokemons.map(p => (
-                  <PokemonNFTCard
-                    key={p.pokemonId}
-                    pokemon={p}
-                    onClick={openModal}
-                    showBuy={false}
-                  />
-                ))}
-              </div>
+              {ownedPokemonIds.size === 0 ? (
+                <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)' }}>
+                  {walletAddress
+                    ? "You haven't purchased any Pokémon yet. Head to the Marketplace to buy some!"
+                    : 'Connect your wallet to view your collection.'}
+                </div>
+              ) : (
+                <div className="pokemon-grid">
+                  {pokemons.filter(p => ownedPokemonIds.has(p.pokemonId)).map(p => (
+                    <PokemonNFTCard
+                      key={p.pokemonId}
+                      pokemon={p}
+                      onClick={openModal}
+                      showBuy={false}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </main>
