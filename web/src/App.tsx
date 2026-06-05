@@ -365,7 +365,12 @@ export default function App() {
       const provider = new ethers.BrowserProvider((window as any).ethereum)
       const signer = await provider.getSigner()
 
-      const tx = await signer.sendTransaction({ to: DEPLOYER_ADDRESS, value: priceInWei })
+      const tx = await signer.sendTransaction({
+        to: DEPLOYER_ADDRESS,
+        value: priceInWei,
+        maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei'),
+        maxFeePerGas: ethers.parseUnits('35', 'gwei'),
+      })
       await tx.wait()
 
       const newOwned = new Set(ownedPokemonIds)
