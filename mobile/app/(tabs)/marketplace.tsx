@@ -1,5 +1,6 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Link } from "expo-router";
 
 interface PokemonItem {
@@ -23,6 +24,21 @@ const TYPE_COLORS: Record<string, string> = {
 const RARITY_COLORS = ['', '#6b7280', '#22c55e', '#3b82f6', '#a855f7', '#f59e0b'];
 const RARITY_LABELS = ['', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
 const PRICES = ['', '0.01', '0.05', '0.25', '1.50', '5.00'];
+
+export const OWNED_STORAGE_KEY = 'ownedPokemonIds';
+
+export async function getOwnedIds(): Promise<Set<number>> {
+  try {
+    const stored = await AsyncStorage.getItem(OWNED_STORAGE_KEY);
+    return stored ? new Set<number>(JSON.parse(stored)) : new Set<number>();
+  } catch { return new Set<number>(); }
+}
+
+export async function addOwnedId(id: number): Promise<void> {
+  const owned = await getOwnedIds();
+  owned.add(id);
+  await AsyncStorage.setItem(OWNED_STORAGE_KEY, JSON.stringify([...owned]));
+}
 
 function calcRarity(total: number, exp: number) {
   const s = total + (exp || 0);
@@ -53,7 +69,7 @@ async function loadItems(limit = 20, offset = 0): Promise<PokemonItem[]> {
 
 const FILTER_TABS = ['All', 'Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'];
 
-function NFTCard({ item }: { item: PokemonItem }) {
+function NFTCard({ item, onBuy, isBuying }: { item: PokemonItem; onBuy: (item: PokemonItem) => void; isBuying: boolean }) {
   const color = TYPE_COLORS[item.types[0]] || '#6366f1';
   const rc = RARITY_COLORS[item.rarity];
   const usd = (parseFloat(item.price) * 0.8).toFixed(2);
@@ -91,8 +107,12 @@ function NFTCard({ item }: { item: PokemonItem }) {
             <Pressable style={styles.btnGhost} onPress={() => {}}>
               <Text style={styles.btnGhostText}>View History</Text>
             </Pressable>
-            <Pressable style={styles.btnPrimary} onPress={() => alert(`Buy ${item.displayName} for ${item.price} MATIC?`)}>
-              <Text style={styles.btnPrimaryText}>Buy Now</Text>
+            <Pressable
+              style={[styles.btnPrimary, isBuying && styles.btnDisabled]}
+              onPress={(e) => { e.preventDefault?.(); onBuy(item); }}
+              disabled={isBuying}
+            >
+              <Text style={styles.btnPrimaryText}>{isBuying ? 'Buying...' : 'Buy Now'}</Text>
             </Pressable>
           </View>
         </View>
@@ -107,6 +127,7 @@ export default function MarketplaceScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
   const [activeFilter, setActiveFilter] = useState('All');
+  const [buyingId, setBuyingId] = useState<number | null>(null);
 
   useEffect(() => { load(0); }, []);
 
@@ -120,6 +141,30 @@ export default function MarketplaceScreen() {
       setLoading(false);
       setLoadingMore(false);
     }
+  }
+
+  async function handleBuy(item: PokemonItem) {
+    Alert.alert(
+      'Confirm Purchase',
+      `Buy ${item.displayName} for ${item.price} MATIC ($${(parseFloat(item.price) * 0.8).toFixed(2)})?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Buy',
+          onPress: async () => {
+            try {
+              setBuyingId(item.pokemonId);
+              await addOwnedId(item.pokemonId);
+              Alert.alert('Purchase Successful!', `${item.displayName} has been added to your collection.`);
+            } catch {
+              Alert.alert('Error', 'Purchase failed. Please try again.');
+            } finally {
+              setBuyingId(null);
+            }
+          },
+        },
+      ]
+    );
   }
 
   const filtered = activeFilter === 'All' ? items : items.filter(i => RARITY_LABELS[i.rarity] === activeFilter);
@@ -141,7 +186,9 @@ export default function MarketplaceScreen() {
         numColumns={2}
         contentContainerStyle={styles.grid}
         columnWrapperStyle={styles.gridRow}
-        renderItem={({ item }) => <NFTCard item={item} />}
+        renderItem={({ item }) => (
+          <NFTCard item={item} onBuy={handleBuy} isBuying={buyingId === item.pokemonId} />
+        )}
         ListFooterComponent={
           <Pressable style={styles.loadMoreBtn} onPress={() => load(offset)} disabled={loadingMore}>
             <Text style={styles.loadMoreText}>{loadingMore ? 'Loading...' : 'Load More'}</Text>
@@ -184,6 +231,7 @@ const styles = StyleSheet.create({
   btnGhost: { flex: 1, padding: 7, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 8, alignItems: 'center' },
   btnGhostText: { color: '#94a3b8', fontSize: 11, fontWeight: '600' },
   btnPrimary: { flex: 1, padding: 7, backgroundColor: '#6366f1', borderRadius: 8, alignItems: 'center' },
+  btnDisabled: { backgroundColor: '#3730a3', opacity: 0.6 },
   btnPrimaryText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   loadMoreBtn: { margin: 12, backgroundColor: '#111827', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 24, padding: 14, alignItems: 'center' },
   loadMoreText: { color: '#94a3b8', fontSize: 14, fontWeight: '600' },
