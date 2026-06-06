@@ -707,8 +707,19 @@ export default function App() {
                   <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>
                     Select your Pokémon to battle. Your opponent will be chosen randomly.
                   </p>
+                  {!walletAddress && (
+                    <div className="error-banner" style={{ background: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.3)', color: '#a5b4fc', marginBottom: 20 }}>
+                      🔗 Connect your wallet to battle with your Pokémon NFTs
+                      <button className="wallet-btn" style={{ marginLeft: 'auto' }} onClick={connectWallet}>Connect Wallet</button>
+                    </div>
+                  )}
+                  {walletAddress && ownedPokemonIds.size === 0 && (
+                    <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)' }}>
+                      You don't own any Pokémon yet. Head to the Marketplace to buy some!
+                    </div>
+                  )}
                   <div className="battle-select-grid">
-                    {filteredPokemons.slice(0, 20).map(p => (
+                    {pokemons.filter(p => ownedPokemonIds.has(p.pokemonId)).map(p => (
                       <div
                         key={p.pokemonId}
                         className={`battle-select-card ${battleSelectedItem?.name === p.name ? 'selected' : ''}`}
