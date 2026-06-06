@@ -1,8 +1,10 @@
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator, FlatList, Image, Pressable,
   ScrollView, StyleSheet, Text, View,
 } from "react-native";
+import { useFocusEffect } from "expo-router";
+import { getOwnedIds } from "./marketplace";
 
 interface PokemonItem {
   pokemonId: number;
@@ -73,31 +75,23 @@ function calcDamage(attacker: BattlePokemon, defender: BattlePokemon, move: Batt
   return { damage: Math.max(1, Math.floor(base * eff * attacker.abilityMod * stab)), effectiveness: eff };
 }
 
-async function loadPokemonList(limit = 20): Promise<PokemonItem[]> {
-  const res = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=${limit}&offset=0`);
-  const data = await res.json();
-  const results = await Promise.allSettled(
-    data.results.map(async (p: { url: string }) => {
-      const d = await (await fetch(p.url)).json();
-      const sm: Record<string, number> = {};
-      d.stats.forEach((s: any) => { sm[s.stat.name] = s.base_stat; });
-      const stats = { hp: sm.hp || 0, attack: sm.attack || 0, defense: sm.defense || 0, spAtk: sm['special-attack'] || 0, spDef: sm['special-defense'] || 0, speed: sm.speed || 0 };
-      const total = Object.values(stats).reduce((a, b) => a + b, 0);
-      return { pokemonId: d.id, name: d.name, displayName: d.name.replace(/-/g, ' '), types: d.types.map((t: any) => t.type.name), officialArtworkUrl: d.sprites.other?.['official-artwork']?.front_default || `https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/other/official-artwork/${d.id}.png`, imageUrl: d.sprites.front_default, stats, rarity: calcRarity(total, d.base_experience) };
-    })
-  );
-  return results.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<PokemonItem>).value);
+async function fetchPokemonById(id: number): Promise<PokemonItem> {
+  const d = await (await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`)).json();
+  const sm: Record<string, number> = {};
+  d.stats.forEach((s: any) => { sm[s.stat.name] = s.base_stat; });
+  const stats = { hp: sm.hp || 0, attack: sm.attack || 0, defense: sm.defense || 0, spAtk: sm['special-attack'] || 0, spDef: sm['special-defense'] || 0, speed: sm.speed || 0 };
+  const total = Object.values(stats).reduce((a, b) => a + b, 0);
+  return { pokemonId: d.id, name: d.name, displayName: d.name.replace(/-/g, ' '), types: d.types.map((t: any) => t.type.name), officialArtworkUrl: d.sprites.other?.['official-artwork']?.front_default || `https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/other/official-artwork/${d.id}.png`, imageUrl: d.sprites.front_default, stats, rarity: calcRarity(total, d.base_experience) };
 }
 
-async function loadBattleData(name: string): Promise<BattlePokemon & { base: PokemonItem }> {
+async function loadBattleData(name: string): Promise<BattlePokemon> {
   const d = await (await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`)).json();
   const sm: Record<string, number> = {};
   d.stats.forEach((s: any) => { sm[s.stat.name] = s.base_stat; });
   const stats = { hp: sm.hp || 0, attack: sm.attack || 0, defense: sm.defense || 0, spAtk: sm['special-attack'] || 0, spDef: sm['special-defense'] || 0, speed: sm.speed || 0 };
   const total = Object.values(stats).reduce((a, b) => a + b, 0);
-  const base = { pokemonId: d.id, name: d.name, displayName: d.name.replace(/-/g, ' '), types: d.types.map((t: any) => t.type.name), officialArtworkUrl: d.sprites.other?.['official-artwork']?.front_default || `https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/other/official-artwork/${d.id}.png`, imageUrl: d.sprites.front_default, stats, rarity: calcRarity(total, d.base_experience) };
+  const base: PokemonItem = { pokemonId: d.id, name: d.name, displayName: d.name.replace(/-/g, ' '), types: d.types.map((t: any) => t.type.name), officialArtworkUrl: d.sprites.other?.['official-artwork']?.front_default || `https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/other/official-artwork/${d.id}.png`, imageUrl: d.sprites.front_default, stats, rarity: calcRarity(total, d.base_experience) };
 
-  // Fetch moves
   const moves: BattleMove[] = [];
   const urls = d.moves.slice(-12).map((m: any) => m.move.url);
   for (const url of urls) {
@@ -111,7 +105,6 @@ async function loadBattleData(name: string): Promise<BattlePokemon & { base: Pok
   }
   if (moves.length === 0) moves.push({ name: 'tackle', displayName: 'Tackle', power: 40, accuracy: 100, type: 'normal', damageClass: 'physical' });
 
-  // Ability modifier
   let abilityMod = 1.0;
   try {
     const ab = await (await fetch(d.abilities[0].ability.url)).json();
@@ -127,7 +120,7 @@ async function loadBattleData(name: string): Promise<BattlePokemon & { base: Pok
 }
 
 export default function BattleScreen() {
-  const [pokemonList, setPokemonList] = useState<PokemonItem[]>([]);
+  const [ownedList, setOwnedList] = useState<PokemonItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<PokemonItem | null>(null);
   const [phase, setPhase] = useState<BattlePhase>('select');
@@ -138,24 +131,45 @@ export default function BattleScreen() {
   const [oppHP, setOppHP] = useState(0);
   const [log, setLog] = useState<{ text: string; color: string }[]>([]);
   const [winner, setWinner] = useState<'player' | 'opponent' | null>(null);
+  const [isOpponentTurn, setIsOpponentTurn] = useState(false);
 
-  useEffect(() => {
-    loadPokemonList(20).then(list => { setPokemonList(list); setListLoading(false); }).catch(() => setListLoading(false));
-  }, []);
+  // Reload owned collection whenever this tab is focused
+  useFocusEffect(
+    useCallback(() => {
+      loadOwned();
+    }, [])
+  );
+
+  async function loadOwned() {
+    setListLoading(true);
+    try {
+      const ownedIds = await getOwnedIds();
+      if (ownedIds.size === 0) {
+        setOwnedList([]);
+        return;
+      }
+      const results = await Promise.allSettled([...ownedIds].map(fetchPokemonById));
+      setOwnedList(results.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<PokemonItem>).value));
+    } finally {
+      setListLoading(false);
+    }
+  }
 
   async function startBattle() {
     if (!selectedItem) return;
     setBattleLoading(true);
     try {
       const me = await loadBattleData(selectedItem.name);
-      const oppItem = pokemonList.filter(p => p.name !== selectedItem.name)[Math.floor(Math.random() * (pokemonList.length - 1))];
-      const opp = await loadBattleData(oppItem.name);
+      // Opponent is a random Pokemon from PokéAPI (not necessarily owned)
+      const randomId = Math.floor(Math.random() * 151) + 1;
+      const opp = await loadBattleData(String(randomId));
       setMyPokemon(me);
       setOppPokemon(opp);
       setMyHP(me.stats.hp * 2);
       setOppHP(opp.stats.hp * 2);
       setLog([{ text: `Battle: ${me.displayName} vs ${opp.displayName}!`, color: '#94a3b8' }]);
       setWinner(null);
+      setIsOpponentTurn(false);
       setPhase('fighting');
     } finally {
       setBattleLoading(false);
@@ -163,7 +177,8 @@ export default function BattleScreen() {
   }
 
   const executeMove = useCallback((move: BattleMove) => {
-    if (!myPokemon || !oppPokemon) return;
+    if (!myPokemon || !oppPokemon || isOpponentTurn) return;
+
     const { damage: myDmg, effectiveness } = calcDamage(myPokemon, oppPokemon, move);
     const newOppHP = Math.max(0, oppHP - myDmg);
     const entries: { text: string; color: string }[] = [
@@ -180,23 +195,35 @@ export default function BattleScreen() {
       return;
     }
 
-    // Opponent turn
-    const oppMove = oppPokemon.moves[Math.floor(Math.random() * oppPokemon.moves.length)];
-    const { damage: oppDmg } = calcDamage(oppPokemon, myPokemon, oppMove);
-    const newMyHP = Math.max(0, myHP - oppDmg);
-    const oppEntries = [
-      { text: `${oppPokemon.displayName} used ${oppMove.displayName}! (${oppDmg} dmg)`, color: '#fca5a5' },
-    ];
-
     setOppHP(newOppHP);
-    setMyHP(newMyHP);
-    setLog(prev => [...prev, ...entries, ...oppEntries]);
+    setLog(prev => [...prev, ...entries]);
+    setIsOpponentTurn(true);
 
-    if (newMyHP <= 0) {
-      setWinner('opponent');
-      setPhase('result');
-    }
-  }, [myPokemon, oppPokemon, myHP, oppHP]);
+    // Opponent attacks after a short delay
+    setTimeout(() => {
+      setOppPokemon(currentOpp => {
+        setMyPokemon(currentMe => {
+          setMyHP(currentMyHP => {
+            if (!currentOpp || !currentMe) return currentMyHP;
+            const oppMove = currentOpp.moves[Math.floor(Math.random() * currentOpp.moves.length)];
+            const { damage: oppDmg } = calcDamage(currentOpp, currentMe, oppMove);
+            const newMyHP = Math.max(0, currentMyHP - oppDmg);
+            setLog(prev => [...prev,
+              { text: `${currentOpp.displayName} used ${oppMove.displayName}! (${oppDmg} dmg)`, color: '#fca5a5' },
+            ]);
+            if (newMyHP <= 0) {
+              setWinner('opponent');
+              setPhase('result');
+            }
+            setIsOpponentTurn(false);
+            return newMyHP;
+          });
+          return currentMe;
+        });
+        return currentOpp;
+      });
+    }, 1000);
+  }, [myPokemon, oppPokemon, oppHP, isOpponentTurn]);
 
   function reset() {
     setPhase('select');
@@ -205,6 +232,7 @@ export default function BattleScreen() {
     setOppPokemon(null);
     setLog([]);
     setWinner(null);
+    setIsOpponentTurn(false);
   }
 
   if (listLoading) return <View style={styles.centered}><ActivityIndicator size="large" color="#6366f1" /></View>;
@@ -213,37 +241,44 @@ export default function BattleScreen() {
     return (
       <View style={styles.container}>
         <Text style={styles.hint}>Select your Pokémon to battle</Text>
-        <FlatList
-          data={pokemonList}
-          keyExtractor={item => String(item.pokemonId)}
-          numColumns={3}
-          contentContainerStyle={styles.selectGrid}
-          columnWrapperStyle={styles.selectRow}
-          renderItem={({ item }) => (
-            <Pressable
-              style={[styles.selectCard, selectedItem?.name === item.name && styles.selectCardActive]}
-              onPress={() => setSelectedItem(item)}
-            >
-              <Image source={{ uri: item.officialArtworkUrl }} style={styles.selectImg} resizeMode="contain" />
-              <Text style={styles.selectName}>{item.displayName}</Text>
-              <View style={styles.typesRow}>
-                {item.types.slice(0, 1).map(t => (
-                  <View key={t} style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[t] || '#555' }]}>
-                    <Text style={styles.typeText}>{t}</Text>
-                  </View>
-                ))}
-              </View>
-              <Text style={styles.hpText}>HP {item.stats.hp}</Text>
-            </Pressable>
-          )}
-          ListFooterComponent={
-            selectedItem ? (
-              <Pressable style={styles.startBtn} onPress={startBattle} disabled={battleLoading}>
-                <Text style={styles.startBtnText}>{battleLoading ? 'Preparing...' : '⚔️ Start Battle!'}</Text>
+        {ownedList.length === 0 ? (
+          <View style={styles.centered}>
+            <Text style={styles.emptyText}>You don't own any Pokémon yet.</Text>
+            <Text style={styles.emptySubText}>Head to the Marketplace to buy some!</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={ownedList}
+            keyExtractor={item => String(item.pokemonId)}
+            numColumns={3}
+            contentContainerStyle={styles.selectGrid}
+            columnWrapperStyle={styles.selectRow}
+            renderItem={({ item }) => (
+              <Pressable
+                style={[styles.selectCard, selectedItem?.name === item.name && styles.selectCardActive]}
+                onPress={() => setSelectedItem(item)}
+              >
+                <Image source={{ uri: item.officialArtworkUrl }} style={styles.selectImg} resizeMode="contain" />
+                <Text style={styles.selectName}>{item.displayName}</Text>
+                <View style={styles.typesRow}>
+                  {item.types.slice(0, 1).map(t => (
+                    <View key={t} style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[t] || '#555' }]}>
+                      <Text style={styles.typeText}>{t}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={styles.hpText}>HP {item.stats.hp}</Text>
               </Pressable>
-            ) : null
-          }
-        />
+            )}
+            ListFooterComponent={
+              selectedItem ? (
+                <Pressable style={styles.startBtn} onPress={startBattle} disabled={battleLoading}>
+                  <Text style={styles.startBtnText}>{battleLoading ? 'Preparing...' : '⚔️ Start Battle!'}</Text>
+                </Pressable>
+              ) : null
+            }
+          />
+        )}
       </View>
     );
   }
@@ -294,20 +329,26 @@ export default function BattleScreen() {
           {log.slice(-5).map((e, i) => <Text key={i} style={[styles.logEntry, { color: e.color }]}>{e.text}</Text>)}
         </ScrollView>
 
-        {/* Moves */}
-        <View style={styles.movesGrid}>
-          {myPokemon.moves.map((move, i) => (
-            <Pressable key={i} style={styles.moveBtn} onPress={() => executeMove(move)}>
-              <Text style={styles.moveName}>{move.displayName}</Text>
-              <View style={styles.typesRow}>
-                <View style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[move.type] || '#555' }]}>
-                  <Text style={styles.typeText}>{move.type}</Text>
+        {/* Moves — disabled during opponent's turn */}
+        {isOpponentTurn ? (
+          <View style={[styles.movesGrid, styles.opponentTurnBanner]}>
+            <Text style={styles.opponentTurnText}>⏳ Opponent is attacking...</Text>
+          </View>
+        ) : (
+          <View style={styles.movesGrid}>
+            {myPokemon.moves.map((move, i) => (
+              <Pressable key={i} style={styles.moveBtn} onPress={() => executeMove(move)}>
+                <Text style={styles.moveName}>{move.displayName}</Text>
+                <View style={styles.typesRow}>
+                  <View style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[move.type] || '#555' }]}>
+                    <Text style={styles.typeText}>{move.type}</Text>
+                  </View>
+                  <Text style={styles.movePower}>PWR {move.power}</Text>
                 </View>
-                <Text style={styles.movePower}>PWR {move.power}</Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
+              </Pressable>
+            ))}
+          </View>
+        )}
       </View>
     );
   }
@@ -334,6 +375,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#080b14' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
   hint: { textAlign: 'center', color: '#94a3b8', fontSize: 14, padding: 16, paddingBottom: 8 },
+  emptyText: { fontSize: 16, fontWeight: '700', color: '#f1f5f9', textAlign: 'center' },
+  emptySubText: { fontSize: 13, color: '#64748b', textAlign: 'center' },
 
   // Select
   selectGrid: { padding: 12, gap: 10 },
@@ -363,6 +406,8 @@ const styles = StyleSheet.create({
   logContent: { padding: 12, gap: 3 },
   logEntry: { fontSize: 12 },
   movesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 12, backgroundColor: '#0d1117', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)' },
+  opponentTurnBanner: { alignItems: 'center', justifyContent: 'center' },
+  opponentTurnText: { color: '#94a3b8', fontSize: 14, padding: 12 },
   moveBtn: { width: '47%', backgroundColor: '#111827', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: 12 },
   moveName: { fontSize: 13, fontWeight: '700', color: '#f1f5f9', textTransform: 'capitalize', marginBottom: 4 },
   movePower: { fontSize: 10, color: '#fbbf24', fontWeight: '600', marginLeft: 4 },
