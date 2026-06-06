@@ -28,7 +28,7 @@ PokeDex lets you:
 4. Browse Pokemon and click **Mint** to create your first NFT — this costs a small amount of MATIC
 5. View your collection in the **My Collection** tab
 6. List Pokemon for sale or make offers on others' Pokemon in the **Marketplace** tab
-7. Challenge others in the **Battle** tab
+7. Go to the **Battle** tab — only the Pokémon you own appear here for selection
 
 ### How to use the Mobile App
 
@@ -187,6 +187,13 @@ npm run web       # Run in browser
 - Mint Pokemon NFTs with on-chain stats (HP, Attack, Defense, Speed)
 - Battle mechanics built directly into the contract
 - Metadata stored on IPFS via Pinata
+
+### Battle Arena
+
+The Battle Arena in the web app (`web/src/App.tsx`) works as follows:
+
+- **Owned Pokémon only:** The selection grid shows only Pokémon you have purchased. The list is derived from `ownedPokemonIds` (persisted in `localStorage`), which is populated when you buy a Pokémon in the Marketplace. If your wallet is not connected, or your collection is empty, a prompt guides you to connect or visit the Marketplace.
+- **Turn-based combat:** Player and opponent turns are strictly alternated. Move buttons are disabled during the opponent's turn and re-enabled after a short delay, preventing the player from acting out of turn.
 
 **PokemonMarketplace.sol**
 - List NFTs for fixed price
