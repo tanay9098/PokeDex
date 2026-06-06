@@ -449,24 +449,32 @@ export default function App() {
         return { ...prev, opponentHP: 0, log: [...log, { text: `${prev.myPokemon.displayName} wins! 🎉`, type: 'highlight' as const }], winner: 'player', phase: 'result' }
       }
 
-      // Opponent's turn
-      const oppMoves = prev.opponentPokemon.moves
-      const oppMove = oppMoves[Math.floor(Math.random() * oppMoves.length)]
-      if (!oppMove) return { ...prev, opponentHP: newOppHP, log, turn: 'player' }
-
-      const oppResult = simulateBattleTurn(prev.opponentPokemon, prev.myPokemon, oppMove)
-      const newMyHP = Math.max(0, prev.myHP - oppResult.damage)
-      const log2 = [...log,
-        { text: `${prev.opponentPokemon.displayName} used ${oppMove.displayName}! (${oppResult.damage} dmg)`, type: 'damage' as const },
-        ...(oppResult.message ? [{ text: oppResult.message, type: 'damage' as const }] : []),
-      ]
-
-      if (newMyHP <= 0) {
-        return { ...prev, opponentHP: newOppHP, myHP: 0, log: [...log2, { text: `${prev.opponentPokemon.displayName} wins!`, type: 'damage' as const }], winner: 'opponent', phase: 'result' }
-      }
-
-      return { ...prev, opponentHP: newOppHP, myHP: newMyHP, log: log2, turn: 'player' }
+      // Lock controls while opponent takes their turn
+      return { ...prev, opponentHP: newOppHP, log: [...log, { text: `${prev.opponentPokemon.displayName} is choosing a move...`, type: 'system' as const }], turn: 'opponent', isAnimating: true }
     })
+
+    // Opponent attacks after a short delay so turns feel separate
+    setTimeout(() => {
+      setBattleState(prev => {
+        if (!prev.myPokemon || !prev.opponentPokemon || prev.turn !== 'opponent') return prev
+        const oppMoves = prev.opponentPokemon.moves
+        const oppMove = oppMoves[Math.floor(Math.random() * oppMoves.length)]
+        if (!oppMove) return { ...prev, turn: 'player', isAnimating: false }
+
+        const oppResult = simulateBattleTurn(prev.opponentPokemon, prev.myPokemon, oppMove)
+        const newMyHP = Math.max(0, prev.myHP - oppResult.damage)
+        const log = [...prev.log,
+          { text: `${prev.opponentPokemon.displayName} used ${oppMove.displayName}! (${oppResult.damage} dmg)`, type: 'damage' as const },
+          ...(oppResult.message ? [{ text: oppResult.message, type: 'damage' as const }] : []),
+        ]
+
+        if (newMyHP <= 0) {
+          return { ...prev, myHP: 0, log: [...log, { text: `${prev.opponentPokemon.displayName} wins!`, type: 'damage' as const }], winner: 'opponent', phase: 'result', isAnimating: false }
+        }
+
+        return { ...prev, myHP: newMyHP, log, turn: 'player', isAnimating: false }
+      })
+    }, 1200)
   }, [])
 
   function resetBattle() {
@@ -794,25 +802,33 @@ export default function App() {
                   </div>
 
                   {/* Move Buttons */}
-                  <div className="move-buttons">
-                    {battleState.myPokemon.moves.length > 0 ? (
-                      battleState.myPokemon.moves.map((move, i) => (
-                        <button key={i} className="move-btn" onClick={() => executeMove(move)}>
-                          <div className="move-btn-name">{move.displayName}</div>
-                          <div className="move-btn-meta">
-                            <span className="type-badge" style={{ background: typeColors[move.type] || '#555', fontSize: 9, marginRight: 4 }}>{move.type}</span>
-                            <span className="move-power">PWR {move.power}</span>
-                            <span style={{ color: 'var(--text-muted)' }}> | {move.accuracy}% ACC</span>
-                          </div>
+                  {battleState.turn === 'opponent' || battleState.isAnimating ? (
+                    <div className="move-buttons" style={{ justifyContent: 'center', alignItems: 'center' }}>
+                      <div style={{ color: 'var(--text-secondary)', fontSize: 14, padding: '12px 0' }}>
+                        ⏳ Opponent is attacking...
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="move-buttons">
+                      {battleState.myPokemon.moves.length > 0 ? (
+                        battleState.myPokemon.moves.map((move, i) => (
+                          <button key={i} className="move-btn" onClick={() => executeMove(move)}>
+                            <div className="move-btn-name">{move.displayName}</div>
+                            <div className="move-btn-meta">
+                              <span className="type-badge" style={{ background: typeColors[move.type] || '#555', fontSize: 9, marginRight: 4 }}>{move.type}</span>
+                              <span className="move-power">PWR {move.power}</span>
+                              <span style={{ color: 'var(--text-muted)' }}> | {move.accuracy}% ACC</span>
+                            </div>
+                          </button>
+                        ))
+                      ) : (
+                        <button className="move-btn" onClick={() => executeMove({ name: 'tackle', displayName: 'Tackle', power: 40, accuracy: 100, type: 'normal', damageClass: 'physical' })}>
+                          <div className="move-btn-name">Tackle</div>
+                          <div className="move-btn-meta">Normal | PWR 40 | 100% ACC</div>
                         </button>
-                      ))
-                    ) : (
-                      <button className="move-btn" onClick={() => executeMove({ name: 'tackle', displayName: 'Tackle', power: 40, accuracy: 100, type: 'normal', damageClass: 'physical' })}>
-                        <div className="move-btn-name">Tackle</div>
-                        <div className="move-btn-meta">Normal | PWR 40 | 100% ACC</div>
-                      </button>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
