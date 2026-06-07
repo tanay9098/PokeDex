@@ -2,6 +2,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Link } from "expo-router";
+import { useAccount, useSendTransaction } from 'wagmi';
+import { useAppKit } from '@reown/appkit-wagmi-react-native';
+import { parseEther } from 'viem';
 
 interface PokemonItem {
   pokemonId: number;
@@ -24,6 +27,9 @@ const TYPE_COLORS: Record<string, string> = {
 const RARITY_COLORS = ['', '#6b7280', '#22c55e', '#3b82f6', '#a855f7', '#f59e0b'];
 const RARITY_LABELS = ['', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
 const PRICES = ['', '0.01', '0.05', '0.25', '1.50', '5.00'];
+
+// Marketplace wallet receives MATIC payments
+const MARKETPLACE_WALLET = '0x000000000000000000000000000000000000dEaD' as `0x${string}`;
 
 export const OWNED_STORAGE_KEY = 'ownedPokemonIds';
 
@@ -127,6 +133,18 @@ function NFTCard({ item, onBuy, isBuying }: { item: PokemonItem; onBuy: (item: P
   );
 }
 
+function WalletButton() {
+  const { open } = useAppKit();
+  const { address, isConnected } = useAccount();
+  return (
+    <Pressable style={styles.walletBtn} onPress={() => open()}>
+      <Text style={styles.walletBtnText}>
+        {isConnected ? `${address!.slice(0, 6)}…${address!.slice(-4)}` : 'Connect Wallet'}
+      </Text>
+    </Pressable>
+  );
+}
+
 export default function MarketplaceScreen() {
   const [items, setItems] = useState<PokemonItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -134,6 +152,10 @@ export default function MarketplaceScreen() {
   const [offset, setOffset] = useState(0);
   const [activeFilter, setActiveFilter] = useState('All');
   const [buyingId, setBuyingId] = useState<number | null>(null);
+
+  const { isConnected } = useAccount();
+  const { open } = useAppKit();
+  const { sendTransactionAsync } = useSendTransaction();
 
   useEffect(() => { load(0); }, []);
 
@@ -150,6 +172,18 @@ export default function MarketplaceScreen() {
   }
 
   async function handleBuy(item: PokemonItem) {
+    if (!isConnected) {
+      Alert.alert(
+        'Wallet Required',
+        'Connect your wallet to purchase Pokémon NFTs.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Connect Wallet', onPress: () => open() },
+        ]
+      );
+      return;
+    }
+
     Alert.alert(
       'Confirm Purchase',
       `Buy ${item.displayName} for ${item.price} MATIC ($${(parseFloat(item.price) * 0.8).toFixed(2)})?`,
@@ -160,10 +194,15 @@ export default function MarketplaceScreen() {
           onPress: async () => {
             try {
               setBuyingId(item.pokemonId);
+              await sendTransactionAsync({
+                to: MARKETPLACE_WALLET,
+                value: parseEther(item.price),
+              });
               await addOwnedId(item.pokemonId);
               Alert.alert('Purchase Successful!', `${item.displayName} has been added to your collection.`);
-            } catch {
-              Alert.alert('Error', 'Purchase failed. Please try again.');
+            } catch (err: any) {
+              const msg = err?.message?.includes('User rejected') ? 'Transaction cancelled.' : 'Purchase failed. Please try again.';
+              Alert.alert('Error', msg);
             } finally {
               setBuyingId(null);
             }
@@ -179,7 +218,10 @@ export default function MarketplaceScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.pageHeading}>Pokémon NFT Marketplace</Text>
+      <View style={styles.header}>
+        <Text style={styles.pageHeading}>Pokémon NFT Marketplace</Text>
+        <WalletButton />
+      </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterRow}>
         {FILTER_TABS.map(f => (
           <Pressable key={f} style={[styles.filterTab, activeFilter === f && styles.filterTabActive]} onPress={() => setActiveFilter(f)}>
@@ -209,7 +251,10 @@ export default function MarketplaceScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#080b14' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#080b14' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 16, paddingTop: 4 },
   pageHeading: { fontSize: 20, fontWeight: '800', color: '#f1f5f9', padding: 16, paddingBottom: 8 },
+  walletBtn: { backgroundColor: '#6366f1', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
+  walletBtnText: { color: '#fff', fontSize: 12, fontWeight: '700', fontFamily: 'monospace' },
   filterScroll: { maxHeight: 52, marginTop: 4 },
   filterRow: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
   filterTab: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#111827' },
