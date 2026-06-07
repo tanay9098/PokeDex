@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
   typeChipText: { color: '#94a3b8', fontSize: 13, fontWeight: '600' },
   typeChipTextActive: { color: '#fff' },
 
-  grid: { padding: 12, gap: 12 },
+  grid: { padding: 12, gap: 12, paddingBottom: 80 },
   gridRow: { gap: 12 },
 
   // Featured card
