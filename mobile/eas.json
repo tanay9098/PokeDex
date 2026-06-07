@@ -12,13 +12,14 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      }
+      },
+       "env": {
+    "EXPO_PUBLIC_API_URL": "https://pokeapi.co/api/v2/pokemon?limit=20"
+  }
 
     },
    
-  "env": {
-    "EXPO_PUBLIC_API_URL": "https://pokeapi.co/api/v2/pokemon?limit=20"
-  },
+ 
 
     "production": {
       "autoIncrement": true
