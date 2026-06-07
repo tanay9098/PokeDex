@@ -7,6 +7,7 @@ config.resolver.unstable_conditionNames = ['require', 'react-native'];
 
 // Mock native wallet SDKs that thirdweb bundles but we don't use
 const emptyModule = require.resolve('./emptyModule.js');
+const cryptoShim = require.resolve('./cryptoShim.js');
 const MOCKED_MODULES = [
   '@coinbase/wallet-mobile-sdk',
   '@coinbase/wallet-mobile-sdk/build/WalletMobileSDKEVMProvider',
@@ -23,6 +24,9 @@ const originalResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (MOCKED_MODULES.includes(moduleName)) {
     return { type: 'sourceFile', filePath: emptyModule };
+  }
+  if (moduleName === 'crypto') {
+    return { type: 'sourceFile', filePath: cryptoShim };
   }
   if (originalResolveRequest) {
     return originalResolveRequest(context, moduleName, platform);
