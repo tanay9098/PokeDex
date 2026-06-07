@@ -4,6 +4,7 @@ import {
   ScrollView, StyleSheet, Text, View,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
+import { io, Socket } from "socket.io-client";
 import { getOwnedIds } from "./marketplace";
 
 interface PokemonItem {
@@ -31,7 +32,9 @@ interface BattlePokemon extends PokemonItem {
   abilityMod: number;
 }
 
+type BattleMode = 'none' | 'single' | 'multi';
 type BattlePhase = 'select' | 'fighting' | 'result';
+type MultiState = 'idle' | 'queued' | 'fighting' | 'result';
 
 const TYPE_COLORS: Record<string, string> = {
   normal: '#a8a29e', fire: '#ef4444', water: '#3b82f6', grass: '#22c55e',
@@ -119,10 +122,15 @@ async function loadBattleData(name: string): Promise<BattlePokemon> {
   return { ...base, moves, abilityMod };
 }
 
+const BATTLE_SERVER = process.env.EXPO_PUBLIC_BATTLE_SERVER || 'http://localhost:3001';
+
 export default function BattleScreen() {
   const [ownedList, setOwnedList] = useState<PokemonItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<PokemonItem | null>(null);
+  const [battleMode, setBattleMode] = useState<BattleMode>('none');
+
+  // Single player
   const [phase, setPhase] = useState<BattlePhase>('select');
   const [battleLoading, setBattleLoading] = useState(false);
   const [myPokemon, setMyPokemon] = useState<BattlePokemon | null>(null);
@@ -133,21 +141,42 @@ export default function BattleScreen() {
   const [winner, setWinner] = useState<'player' | 'opponent' | null>(null);
   const [isOpponentTurn, setIsOpponentTurn] = useState(false);
 
-  // Reload owned collection whenever this tab is focused
+  // Multiplayer
+  const socketRef = useRef<Socket | null>(null);
+  const [multiState, setMultiState] = useState<MultiState>('idle');
+  const [multiRoomId, setMultiRoomId] = useState<string | null>(null);
+  const [multiRole, setMultiRole] = useState<'p1' | 'p2' | null>(null);
+  const [multiMyPokemon, setMultiMyPokemon] = useState<BattlePokemon | null>(null);
+  const [multiOppPokemon, setMultiOppPokemon] = useState<any | null>(null);
+  const [multiMyHP, setMultiMyHP] = useState(0);
+  const [multiOppHP, setMultiOppHP] = useState(0);
+  const [multiMaxMyHP, setMultiMaxMyHP] = useState(0);
+  const [multiMaxOppHP, setMultiMaxOppHP] = useState(0);
+  const [multiLog, setMultiLog] = useState<{ text: string; color: string }[]>([]);
+  const [multiMyTurn, setMultiMyTurn] = useState(false);
+  const [multiWinner, setMultiWinner] = useState<'you' | 'opponent' | null>(null);
+
   useFocusEffect(
     useCallback(() => {
       loadOwned();
+      return () => {
+        disconnectSocket();
+      };
     }, [])
   );
+
+  function disconnectSocket() {
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+  }
 
   async function loadOwned() {
     setListLoading(true);
     try {
       const ownedIds = await getOwnedIds();
-      if (ownedIds.size === 0) {
-        setOwnedList([]);
-        return;
-      }
+      if (ownedIds.size === 0) { setOwnedList([]); return; }
       const results = await Promise.allSettled([...ownedIds].map(fetchPokemonById));
       setOwnedList(results.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<PokemonItem>).value));
     } finally {
@@ -155,12 +184,32 @@ export default function BattleScreen() {
     }
   }
 
+  function resetAll() {
+    disconnectSocket();
+    setBattleMode('none');
+    setPhase('select');
+    setSelectedItem(null);
+    setMyPokemon(null);
+    setOppPokemon(null);
+    setLog([]);
+    setWinner(null);
+    setIsOpponentTurn(false);
+    setMultiState('idle');
+    setMultiRoomId(null);
+    setMultiRole(null);
+    setMultiMyPokemon(null);
+    setMultiOppPokemon(null);
+    setMultiLog([]);
+    setMultiMyTurn(false);
+    setMultiWinner(null);
+  }
+
+  // ─── Single Player ───────────────────────────────
   async function startBattle() {
     if (!selectedItem) return;
     setBattleLoading(true);
     try {
       const me = await loadBattleData(selectedItem.name);
-      // Opponent is a random Pokemon from PokéAPI (not necessarily owned)
       const randomId = Math.floor(Math.random() * 151) + 1;
       const opp = await loadBattleData(String(randomId));
       setMyPokemon(me);
@@ -178,7 +227,6 @@ export default function BattleScreen() {
 
   const executeMove = useCallback((move: BattleMove) => {
     if (!myPokemon || !oppPokemon || isOpponentTurn) return;
-
     const { damage: myDmg, effectiveness } = calcDamage(myPokemon, oppPokemon, move);
     const newOppHP = Math.max(0, oppHP - myDmg);
     const entries: { text: string; color: string }[] = [
@@ -186,7 +234,6 @@ export default function BattleScreen() {
     ];
     if (effectiveness > 1) entries.push({ text: "Super effective!", color: '#fbbf24' });
     if (effectiveness < 1 && effectiveness > 0) entries.push({ text: "Not very effective...", color: '#94a3b8' });
-
     if (newOppHP <= 0) {
       setOppHP(0);
       setLog(prev => [...prev, ...entries, { text: `${myPokemon.displayName} wins! 🎉`, color: '#22c55e' }]);
@@ -194,12 +241,9 @@ export default function BattleScreen() {
       setPhase('result');
       return;
     }
-
     setOppHP(newOppHP);
     setLog(prev => [...prev, ...entries]);
     setIsOpponentTurn(true);
-
-    // Opponent attacks after a short delay
     setTimeout(() => {
       setOppPokemon(currentOpp => {
         setMyPokemon(currentMe => {
@@ -208,13 +252,8 @@ export default function BattleScreen() {
             const oppMove = currentOpp.moves[Math.floor(Math.random() * currentOpp.moves.length)];
             const { damage: oppDmg } = calcDamage(currentOpp, currentMe, oppMove);
             const newMyHP = Math.max(0, currentMyHP - oppDmg);
-            setLog(prev => [...prev,
-              { text: `${currentOpp.displayName} used ${oppMove.displayName}! (${oppDmg} dmg)`, color: '#fca5a5' },
-            ]);
-            if (newMyHP <= 0) {
-              setWinner('opponent');
-              setPhase('result');
-            }
+            setLog(prev => [...prev, { text: `${currentOpp.displayName} used ${oppMove.displayName}! (${oppDmg} dmg)`, color: '#fca5a5' }]);
+            if (newMyHP <= 0) { setWinner('opponent'); setPhase('result'); }
             setIsOpponentTurn(false);
             return newMyHP;
           });
@@ -225,21 +264,122 @@ export default function BattleScreen() {
     }, 1000);
   }, [myPokemon, oppPokemon, oppHP, isOpponentTurn]);
 
-  function reset() {
-    setPhase('select');
-    setSelectedItem(null);
-    setMyPokemon(null);
-    setOppPokemon(null);
-    setLog([]);
-    setWinner(null);
-    setIsOpponentTurn(false);
+  // ─── Multiplayer ─────────────────────────────────
+  async function joinMultiQueue() {
+    if (!selectedItem) return;
+    setBattleLoading(true);
+    try {
+      const me = await loadBattleData(selectedItem.name);
+      setMultiMyPokemon(me);
+
+      const socket = io(BATTLE_SERVER, { transports: ['websocket', 'polling'] });
+      socketRef.current = socket;
+
+      socket.on('connect', () => {
+        socket.emit('join_queue', { pokemon: me });
+        setMultiState('queued');
+      });
+
+      socket.on('battle_start', (data: any) => {
+        setMultiRoomId(data.roomId);
+        setMultiRole(data.role);
+        setMultiOppPokemon(data.opponentPokemon);
+        setMultiMyHP(data.myHP);
+        setMultiOppHP(data.opponentHP);
+        setMultiMaxMyHP(data.myHP);
+        setMultiMaxOppHP(data.opponentHP);
+        setMultiMyTurn(data.yourTurn);
+        setMultiLog([{ text: `Battle: ${me.displayName} vs ${data.opponentPokemon.displayName}!`, color: '#94a3b8' }]);
+        setMultiState('fighting');
+      });
+
+      socket.on('move_result', (data: any) => {
+        const isMyMove = (multiRole === 'p1' && data.attackerRole === 'p1') || (multiRole === 'p2' && data.attackerRole === 'p2');
+        const entries: { text: string; color: string }[] = [
+          { text: `${data.attackerName} used ${data.moveName}! (${data.damage} dmg)`, color: isMyMove ? '#a5b4fc' : '#fca5a5' },
+        ];
+        if (data.effectiveness > 1) entries.push({ text: 'Super effective!', color: '#fbbf24' });
+        setMultiLog(prev => [...prev, ...entries]);
+        if (isMyMove) setMultiOppHP(data.newDefenderHP);
+        else setMultiMyHP(data.newDefenderHP);
+        setMultiMyTurn(false);
+      });
+
+      socket.on('your_turn', () => setMultiMyTurn(true));
+
+      socket.on('battle_end', (data: any) => {
+        setMultiWinner(data.winner);
+        setMultiLog(prev => [...prev, {
+          text: data.winner === 'you' ? `${data.winnerName} wins! 🎉` : `${data.winnerName} wins!`,
+          color: data.winner === 'you' ? '#22c55e' : '#fca5a5',
+        }]);
+        setMultiState('result');
+      });
+
+      socket.on('opponent_disconnected', () => {
+        setMultiLog(prev => [...prev, { text: 'Opponent disconnected. You win!', color: '#94a3b8' }]);
+        setMultiWinner('you');
+        setMultiState('result');
+      });
+
+      socket.on('connect_error', () => {
+        alert('Cannot connect to battle server. Make sure the server is running.');
+        resetAll();
+      });
+    } catch {
+      alert('Failed to load Pokémon data for battle');
+    } finally {
+      setBattleLoading(false);
+    }
   }
 
+  function executeMultiMove(move: BattleMove) {
+    if (!multiMyTurn || !socketRef.current || !multiRoomId) return;
+    socketRef.current.emit('execute_move', { roomId: multiRoomId, move });
+    setMultiMyTurn(false);
+  }
+
+  // ─── Render ──────────────────────────────────────
   if (listLoading) return <View style={styles.centered}><ActivityIndicator size="large" color="#6366f1" /></View>;
 
-  if (phase === 'select') {
+  // Mode selection screen
+  if (battleMode === 'none') {
     return (
       <View style={styles.container}>
+        <Text style={styles.pageTitle}>⚔️ Battle Arena</Text>
+        <Text style={styles.hint}>Choose your battle mode to begin.</Text>
+        <View style={styles.modeRow}>
+          <Pressable style={[styles.modeCard]} onPress={() => setBattleMode('single')}>
+            <Text style={styles.modeIcon}>🤖</Text>
+            <Text style={styles.modeTitle}>Single Player</Text>
+            <Text style={styles.modeDesc}>Battle against an AI opponent with a random challenger.</Text>
+            <View style={[styles.modeBtn, { backgroundColor: '#ef4444' }]}>
+              <Text style={styles.modeBtnText}>Play vs AI</Text>
+            </View>
+          </Pressable>
+          <Pressable style={[styles.modeCard, styles.modeCardMulti]} onPress={() => setBattleMode('multi')}>
+            <Text style={styles.modeIcon}>👥</Text>
+            <Text style={styles.modeTitle}>Multiplayer</Text>
+            <Text style={styles.modeDesc}>Battle a real player online via Socket.io server.</Text>
+            <View style={[styles.modeBtn, { backgroundColor: '#6366f1' }]}>
+              <Text style={styles.modeBtnText}>Play Online</Text>
+            </View>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  // Single player - select
+  if (battleMode === 'single' && phase === 'select') {
+    return (
+      <View style={styles.container}>
+        <View style={styles.backRow}>
+          <Pressable style={styles.backBtn} onPress={resetAll}>
+            <Text style={styles.backBtnText}>← Back</Text>
+          </Pressable>
+          <Text style={styles.modeLabel}>🤖 Single Player</Text>
+        </View>
         <Text style={styles.hint}>Select your Pokémon to battle</Text>
         {ownedList.length === 0 ? (
           <View style={styles.centered}>
@@ -283,13 +423,143 @@ export default function BattleScreen() {
     );
   }
 
-  if (phase === 'fighting' && myPokemon && oppPokemon) {
-    const myHpPct = (myHP / (myPokemon.stats.hp * 2)) * 100;
-    const oppHpPct = (oppHP / (oppPokemon.stats.hp * 2)) * 100;
-
+  // Multiplayer - select
+  if (battleMode === 'multi' && multiState === 'idle') {
     return (
       <View style={styles.container}>
-        {/* Opponent zone */}
+        <View style={styles.backRow}>
+          <Pressable style={styles.backBtn} onPress={resetAll}>
+            <Text style={styles.backBtnText}>← Back</Text>
+          </Pressable>
+          <Text style={styles.modeLabel}>👥 Multiplayer</Text>
+        </View>
+        <Text style={styles.hint}>Select your Pokémon and find an opponent online</Text>
+        {ownedList.length === 0 ? (
+          <View style={styles.centered}>
+            <Text style={styles.emptyText}>You don't own any Pokémon yet.</Text>
+            <Text style={styles.emptySubText}>Head to the Marketplace to buy some!</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={ownedList}
+            keyExtractor={item => String(item.pokemonId)}
+            numColumns={3}
+            contentContainerStyle={styles.selectGrid}
+            columnWrapperStyle={styles.selectRow}
+            renderItem={({ item }) => (
+              <Pressable
+                style={[styles.selectCard, selectedItem?.name === item.name && styles.selectCardActive, selectedItem?.name === item.name && styles.selectCardActiveMulti]}
+                onPress={() => setSelectedItem(item)}
+              >
+                <Image source={{ uri: item.officialArtworkUrl }} style={styles.selectImg} resizeMode="contain" />
+                <Text style={styles.selectName}>{item.displayName}</Text>
+                <View style={styles.typesRow}>
+                  {item.types.slice(0, 1).map(t => (
+                    <View key={t} style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[t] || '#555' }]}>
+                      <Text style={styles.typeText}>{t}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={styles.hpText}>HP {item.stats.hp}</Text>
+              </Pressable>
+            )}
+            ListFooterComponent={
+              selectedItem ? (
+                <Pressable style={[styles.startBtn, { backgroundColor: '#6366f1' }]} onPress={joinMultiQueue} disabled={battleLoading}>
+                  <Text style={styles.startBtnText}>{battleLoading ? 'Connecting...' : '🌐 Find Opponent'}</Text>
+                </Pressable>
+              ) : null
+            }
+          />
+        )}
+      </View>
+    );
+  }
+
+  // Multiplayer - queued
+  if (battleMode === 'multi' && multiState === 'queued') {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color="#6366f1" />
+        <Text style={[styles.resultTitle, { fontSize: 20, marginTop: 20 }]}>🌐 Searching for Opponent...</Text>
+        <Text style={styles.resultSub}>Waiting in matchmaking queue...</Text>
+        <Pressable style={[styles.startBtn, { backgroundColor: '#374151', marginTop: 24 }]} onPress={resetAll}>
+          <Text style={styles.startBtnText}>Cancel</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  // Multiplayer - fighting
+  if (battleMode === 'multi' && multiState === 'fighting' && multiMyPokemon && multiOppPokemon) {
+    const myHpPct = (multiMyHP / multiMaxMyHP) * 100;
+    const oppHpPct = (multiOppHP / multiMaxOppHP) * 100;
+    return (
+      <View style={styles.container}>
+        <View style={styles.multiModeBanner}>
+          <Text style={styles.multiModeBannerText}>👥 Multiplayer Battle</Text>
+        </View>
+        <View style={[styles.battleZone, styles.oppZone]}>
+          <View style={styles.battleInfo}>
+            <Text style={styles.battleName}>{multiOppPokemon.displayName}</Text>
+            <View style={styles.hpTrack}>
+              <View style={[styles.hpFill, { width: `${oppHpPct}%` as any, backgroundColor: getHpColor(oppHpPct) }]} />
+            </View>
+            <Text style={styles.hpLabel}>{multiOppHP} / {multiMaxOppHP} HP</Text>
+          </View>
+          <Image source={{ uri: multiOppPokemon.officialArtworkUrl || `https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/other/official-artwork/${multiOppPokemon.pokemonId}.png` }} style={styles.battleImg} resizeMode="contain" />
+        </View>
+        <View style={styles.vsDivider}>
+          <View style={styles.typesRow}>
+            {multiOppPokemon.types.map((t: string) => <View key={t} style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[t] || '#555' }]}><Text style={styles.typeText}>{t}</Text></View>)}
+          </View>
+          <View style={styles.vsBadge}><Text style={styles.vsText}>VS</Text></View>
+          <View style={styles.typesRow}>
+            {multiMyPokemon.types.map(t => <View key={t} style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[t] || '#555' }]}><Text style={styles.typeText}>{t}</Text></View>)}
+          </View>
+        </View>
+        <View style={[styles.battleZone, styles.myZone]}>
+          <Image source={{ uri: multiMyPokemon.officialArtworkUrl }} style={[styles.battleImg, { transform: [{ scaleX: -1 }] }]} resizeMode="contain" />
+          <View style={[styles.battleInfo, { alignItems: 'flex-end' }]}>
+            <Text style={[styles.battleName, { color: '#a5b4fc' }]}>{multiMyPokemon.displayName}</Text>
+            <View style={styles.hpTrack}>
+              <View style={[styles.hpFill, { width: `${myHpPct}%` as any, backgroundColor: getHpColor(myHpPct) }]} />
+            </View>
+            <Text style={[styles.hpLabel, { textAlign: 'right' }]}>{multiMyHP} / {multiMaxMyHP} HP</Text>
+          </View>
+        </View>
+        <ScrollView style={styles.logScroll} contentContainerStyle={styles.logContent} ref={r => r?.scrollToEnd({ animated: true })}>
+          {multiLog.slice(-5).map((e, i) => <Text key={i} style={[styles.logEntry, { color: e.color }]}>{e.text}</Text>)}
+        </ScrollView>
+        {!multiMyTurn ? (
+          <View style={[styles.movesGrid, styles.opponentTurnBanner]}>
+            <Text style={styles.opponentTurnText}>⏳ Waiting for opponent's move...</Text>
+          </View>
+        ) : (
+          <View style={styles.movesGrid}>
+            {multiMyPokemon.moves.map((move, i) => (
+              <Pressable key={i} style={[styles.moveBtn, { borderColor: '#6366f1' }]} onPress={() => executeMultiMove(move)}>
+                <Text style={styles.moveName}>{move.displayName}</Text>
+                <View style={styles.typesRow}>
+                  <View style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[move.type] || '#555' }]}>
+                    <Text style={styles.typeText}>{move.type}</Text>
+                  </View>
+                  <Text style={styles.movePower}>PWR {move.power}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  // Single player - fighting
+  if (battleMode === 'single' && phase === 'fighting' && myPokemon && oppPokemon) {
+    const myHpPct = (myHP / (myPokemon.stats.hp * 2)) * 100;
+    const oppHpPct = (oppHP / (oppPokemon.stats.hp * 2)) * 100;
+    return (
+      <View style={styles.container}>
         <View style={[styles.battleZone, styles.oppZone]}>
           <View style={styles.battleInfo}>
             <Text style={styles.battleName}>{oppPokemon.displayName}</Text>
@@ -300,8 +570,6 @@ export default function BattleScreen() {
           </View>
           <Image source={{ uri: oppPokemon.officialArtworkUrl }} style={styles.battleImg} resizeMode="contain" />
         </View>
-
-        {/* VS divider */}
         <View style={styles.vsDivider}>
           <View style={styles.typesRow}>
             {oppPokemon.types.map(t => <View key={t} style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[t] || '#555' }]}><Text style={styles.typeText}>{t}</Text></View>)}
@@ -311,8 +579,6 @@ export default function BattleScreen() {
             {myPokemon.types.map(t => <View key={t} style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[t] || '#555' }]}><Text style={styles.typeText}>{t}</Text></View>)}
           </View>
         </View>
-
-        {/* Player zone */}
         <View style={[styles.battleZone, styles.myZone]}>
           <Image source={{ uri: myPokemon.officialArtworkUrl }} style={[styles.battleImg, { transform: [{ scaleX: -1 }] }]} resizeMode="contain" />
           <View style={[styles.battleInfo, { alignItems: 'flex-end' }]}>
@@ -323,13 +589,9 @@ export default function BattleScreen() {
             <Text style={[styles.hpLabel, { textAlign: 'right' }]}>{myHP} / {myPokemon.stats.hp * 2} HP</Text>
           </View>
         </View>
-
-        {/* Battle log */}
         <ScrollView style={styles.logScroll} contentContainerStyle={styles.logContent} ref={r => r?.scrollToEnd({ animated: true })}>
           {log.slice(-5).map((e, i) => <Text key={i} style={[styles.logEntry, { color: e.color }]}>{e.text}</Text>)}
         </ScrollView>
-
-        {/* Moves — disabled during opponent's turn */}
         {isOpponentTurn ? (
           <View style={[styles.movesGrid, styles.opponentTurnBanner]}>
             <Text style={styles.opponentTurnText}>⏳ Opponent is attacking...</Text>
@@ -353,15 +615,18 @@ export default function BattleScreen() {
     );
   }
 
-  if (phase === 'result') {
+  // Result screens
+  if (phase === 'result' || multiState === 'result') {
+    const isWin = (phase === 'result' && winner === 'player') || (multiState === 'result' && multiWinner === 'you');
+    const winnerName = phase === 'result'
+      ? (winner === 'player' ? myPokemon?.displayName : oppPokemon?.displayName)
+      : (multiWinner === 'you' ? multiMyPokemon?.displayName : multiOppPokemon?.displayName);
     return (
       <View style={[styles.container, styles.centered]}>
-        <Text style={styles.resultEmoji}>{winner === 'player' ? '🏆' : '💀'}</Text>
-        <Text style={styles.resultTitle}>{winner === 'player' ? 'Victory!' : 'Defeated!'}</Text>
-        <Text style={styles.resultSub}>
-          {winner === 'player' ? `${myPokemon?.displayName} won!` : `${oppPokemon?.displayName} was too strong...`}
-        </Text>
-        <Pressable style={styles.startBtn} onPress={reset}>
+        <Text style={styles.resultEmoji}>{isWin ? '🏆' : '💀'}</Text>
+        <Text style={styles.resultTitle}>{isWin ? 'Victory!' : 'Defeated!'}</Text>
+        <Text style={styles.resultSub}>{isWin ? `${winnerName} won!` : `${winnerName} was too strong...`}</Text>
+        <Pressable style={styles.startBtn} onPress={resetAll}>
           <Text style={styles.startBtnText}>Play Again</Text>
         </Pressable>
       </View>
@@ -374,15 +639,40 @@ export default function BattleScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#080b14' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
+  pageTitle: { textAlign: 'center', fontSize: 22, fontWeight: '800', color: '#f1f5f9', paddingTop: 20, paddingBottom: 4 },
   hint: { textAlign: 'center', color: '#94a3b8', fontSize: 14, padding: 16, paddingBottom: 8 },
   emptyText: { fontSize: 16, fontWeight: '700', color: '#f1f5f9', textAlign: 'center' },
   emptySubText: { fontSize: 13, color: '#64748b', textAlign: 'center' },
+
+  // Mode selection
+  modeRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingTop: 8 },
+  modeCard: {
+    flex: 1, backgroundColor: '#111827', borderRadius: 20, padding: 20,
+    alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.06)',
+  },
+  modeCardMulti: { borderColor: 'rgba(99,102,241,0.2)' },
+  modeIcon: { fontSize: 42, marginBottom: 10 },
+  modeTitle: { fontSize: 16, fontWeight: '800', color: '#f1f5f9', marginBottom: 8, textAlign: 'center' },
+  modeDesc: { fontSize: 12, color: '#94a3b8', textAlign: 'center', lineHeight: 18, marginBottom: 16 },
+  modeBtn: { borderRadius: 12, paddingVertical: 10, paddingHorizontal: 16, alignItems: 'center', width: '100%' },
+  modeBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+
+  // Back row
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
+  backBtn: { backgroundColor: '#1f2937', borderRadius: 10, paddingVertical: 6, paddingHorizontal: 12 },
+  backBtnText: { color: '#94a3b8', fontSize: 13, fontWeight: '600' },
+  modeLabel: { color: '#94a3b8', fontSize: 13, fontWeight: '600' },
+
+  // Multi banner
+  multiModeBanner: { alignItems: 'center', paddingVertical: 6, backgroundColor: 'rgba(99,102,241,0.1)' },
+  multiModeBannerText: { color: '#a5b4fc', fontSize: 12, fontWeight: '700' },
 
   // Select
   selectGrid: { padding: 12, gap: 10 },
   selectRow: { gap: 10 },
   selectCard: { flex: 1, backgroundColor: '#111827', borderRadius: 16, padding: 10, alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.06)' },
-  selectCardActive: { borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)' },
+  selectCardActive: { borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.08)' },
+  selectCardActiveMulti: { borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.08)' },
   selectImg: { width: 70, height: 70 },
   selectName: { fontSize: 11, fontWeight: '700', color: '#f1f5f9', textTransform: 'capitalize', textAlign: 'center', marginTop: 4 },
   hpText: { fontSize: 10, color: '#475569', marginTop: 2 },

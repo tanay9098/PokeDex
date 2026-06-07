@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { ethers } from 'ethers'
+import { io, Socket } from 'socket.io-client'
 import './App.css'
 import {
   fetchPokemonList,
@@ -16,7 +17,9 @@ import {
 
 type Page = 'home' | 'marketplace' | 'battle' | 'collection'
 
+type BattleMode = 'none' | 'single' | 'multi'
 type BattlePhase = 'select' | 'fighting' | 'result'
+type MultiState = 'idle' | 'queued' | 'fighting' | 'result'
 
 interface BattleState {
   phase: BattlePhase
@@ -272,8 +275,24 @@ export default function App() {
     winner: null,
     isAnimating: false,
   })
+  const [battleMode, setBattleMode] = useState<BattleMode>('none')
   const [battleSelectedItem, setBattleSelectedItem] = useState<PokemonListItem | null>(null)
   const [battleLoading, setBattleLoading] = useState(false)
+
+  // Multiplayer state
+  const socketRef = useRef<Socket | null>(null)
+  const [multiState, setMultiState] = useState<MultiState>('idle')
+  const [multiRoomId, setMultiRoomId] = useState<string | null>(null)
+  const [multiRole, setMultiRole] = useState<'p1' | 'p2' | null>(null)
+  const [multiMyPokemon, setMultiMyPokemon] = useState<PokemonData | null>(null)
+  const [multiOppPokemon, setMultiOppPokemon] = useState<any | null>(null)
+  const [multiMyHP, setMultiMyHP] = useState(0)
+  const [multiOppHP, setMultiOppHP] = useState(0)
+  const [multiMaxMyHP, setMultiMaxMyHP] = useState(0)
+  const [multiMaxOppHP, setMultiMaxOppHP] = useState(0)
+  const [multiLog, setMultiLog] = useState<{ text: string; type: 'normal' | 'highlight' | 'damage' | 'system' }[]>([])
+  const [multiMyTurn, setMultiMyTurn] = useState(false)
+  const [multiWinner, setMultiWinner] = useState<'you' | 'opponent' | null>(null)
   const [buyingPokemonId, setBuyingPokemonId] = useState<number | null>(null)
   const [ownedPokemonIds, setOwnedPokemonIds] = useState<Set<number>>(() => {
     try {
@@ -480,6 +499,106 @@ export default function App() {
   function resetBattle() {
     setBattleState({ phase: 'select', myPokemon: null, opponentPokemon: null, myHP: 0, opponentHP: 0, log: [], turn: 'player', winner: null, isAnimating: false })
     setBattleSelectedItem(null)
+  }
+
+  function resetMode() {
+    resetBattle()
+    disconnectSocket()
+    setBattleMode('none')
+    setMultiState('idle')
+    setMultiRoomId(null)
+    setMultiRole(null)
+    setMultiMyPokemon(null)
+    setMultiOppPokemon(null)
+    setMultiLog([])
+    setMultiMyTurn(false)
+    setMultiWinner(null)
+  }
+
+  function disconnectSocket() {
+    if (socketRef.current) {
+      socketRef.current.disconnect()
+      socketRef.current = null
+    }
+  }
+
+  async function joinMultiQueue() {
+    if (!battleSelectedItem) return
+    setBattleLoading(true)
+    try {
+      const myPokemon = await fetchPokemonDetails(battleSelectedItem.name)
+      setMultiMyPokemon(myPokemon)
+
+      const SERVER_URL = import.meta.env.VITE_BATTLE_SERVER || 'http://localhost:3001'
+      const socket = io(SERVER_URL, { transports: ['websocket', 'polling'] })
+      socketRef.current = socket
+
+      socket.on('connect', () => {
+        socket.emit('join_queue', { pokemon: myPokemon })
+        setMultiState('queued')
+      })
+
+      socket.on('battle_start', (data: any) => {
+        setMultiRoomId(data.roomId)
+        setMultiRole(data.role)
+        setMultiOppPokemon(data.opponentPokemon)
+        setMultiMyHP(data.myHP)
+        setMultiOppHP(data.opponentHP)
+        setMultiMaxMyHP(data.myHP)
+        setMultiMaxOppHP(data.opponentHP)
+        setMultiMyTurn(data.yourTurn)
+        setMultiLog([{ text: `Battle: ${myPokemon.displayName} vs ${data.opponentPokemon.displayName}!`, type: 'system' }])
+        setMultiState('fighting')
+      })
+
+      socket.on('move_result', (data: any) => {
+        const isMyMove = (multiRole === 'p1' && data.attackerRole === 'p1') || (multiRole === 'p2' && data.attackerRole === 'p2')
+        setMultiLog(prev => [...prev,
+          { text: `${data.attackerName} used ${data.moveName}! (${data.damage} dmg)`, type: isMyMove ? 'highlight' : 'damage' },
+          ...(data.effectiveness > 1 ? [{ text: 'Super effective!', type: 'highlight' as const }] : []),
+          ...(data.effectiveness < 1 && data.effectiveness > 0 ? [{ text: 'Not very effective...', type: 'normal' as const }] : []),
+        ])
+        if (isMyMove) {
+          setMultiOppHP(data.newDefenderHP)
+        } else {
+          setMultiMyHP(data.newDefenderHP)
+        }
+        setMultiMyTurn(false)
+      })
+
+      socket.on('your_turn', () => {
+        setMultiMyTurn(true)
+      })
+
+      socket.on('battle_end', (data: any) => {
+        setMultiWinner(data.winner)
+        setMultiLog(prev => [...prev,
+          { text: data.winner === 'you' ? `${data.winnerName} wins! 🎉` : `${data.winnerName} wins!`, type: data.winner === 'you' ? 'highlight' : 'damage' }
+        ])
+        setMultiState('result')
+      })
+
+      socket.on('opponent_disconnected', () => {
+        setMultiLog(prev => [...prev, { text: 'Opponent disconnected. You win!', type: 'system' }])
+        setMultiWinner('you')
+        setMultiState('result')
+      })
+
+      socket.on('connect_error', () => {
+        alert('Cannot connect to battle server. Make sure the server is running on port 3001.')
+        resetMode()
+      })
+    } catch {
+      alert('Failed to load Pokémon data for battle')
+    } finally {
+      setBattleLoading(false)
+    }
+  }
+
+  function executeMultiMove(move: PokemonMove) {
+    if (!multiMyTurn || !socketRef.current || !multiRoomId) return
+    socketRef.current.emit('execute_move', { roomId: multiRoomId, move })
+    setMultiMyTurn(false)
   }
 
   // ──────────────────────────────────────────────
@@ -702,11 +821,42 @@ export default function App() {
             <div className="battle-page">
               <div className="page-heading">⚔️ Pokémon Battle Arena</div>
 
-              {battleState.phase === 'select' && (
+              {/* MODE SELECTION */}
+              {battleMode === 'none' && (
                 <div>
-                  <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>
-                    Select your Pokémon to battle. Your opponent will be chosen randomly.
+                  <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>
+                    Choose your battle mode to begin.
                   </p>
+                  <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                    <div
+                      className="battle-mode-card"
+                      onClick={() => setBattleMode('single')}
+                    >
+                      <div className="battle-mode-icon">🤖</div>
+                      <div className="battle-mode-title">Single Player</div>
+                      <div className="battle-mode-desc">Battle against an AI opponent. Choose your Pokémon and fight a random challenger.</div>
+                      <button className="btn-battle-start" style={{ marginTop: 16 }}>Play vs AI</button>
+                    </div>
+                    <div
+                      className="battle-mode-card battle-mode-card--multi"
+                      onClick={() => setBattleMode('multi')}
+                    >
+                      <div className="battle-mode-icon">👥</div>
+                      <div className="battle-mode-title">Multiplayer</div>
+                      <div className="battle-mode-desc">Battle against a real player online via Socket.io. Requires the battle server to be running.</div>
+                      <button className="btn-battle-start" style={{ marginTop: 16, background: 'linear-gradient(135deg,#8b5cf6,#6366f1)' }}>Play Online</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SINGLE PLAYER MODE */}
+              {battleMode === 'single' && battleState.phase === 'select' && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                    <button className="btn-secondary" style={{ padding: '6px 14px', fontSize: 12 }} onClick={resetMode}>← Back</button>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>🤖 Single Player — Select your Pokémon to battle. Your opponent will be chosen randomly.</span>
+                  </div>
                   {!walletAddress && (
                     <div className="error-banner" style={{ background: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.3)', color: '#a5b4fc', marginBottom: 20 }}>
                       🔗 Connect your wallet to battle with your Pokémon NFTs
@@ -843,7 +993,7 @@ export default function App() {
                 </div>
               )}
 
-              {battleState.phase === 'result' && (
+              {battleMode === 'single' && battleState.phase === 'result' && (
                 <div className="battle-arena">
                   <div className="battle-result">
                     <div className="battle-result-emoji">{battleState.winner === 'player' ? '🏆' : '💀'}</div>
@@ -857,7 +1007,159 @@ export default function App() {
                     </div>
                     <div className="battle-result-actions">
                       <button className="btn-battle-start" onClick={resetBattle}>Play Again</button>
-                      <button className="btn-secondary" onClick={() => { resetBattle(); setPage('home') }}>Back to Home</button>
+                      <button className="btn-secondary" onClick={resetMode}>Change Mode</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* MULTIPLAYER MODE */}
+              {battleMode === 'multi' && multiState === 'idle' && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                    <button className="btn-secondary" style={{ padding: '6px 14px', fontSize: 12 }} onClick={resetMode}>← Back</button>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>👥 Multiplayer — Select your Pokémon and find an opponent online.</span>
+                  </div>
+                  {!walletAddress && (
+                    <div className="error-banner" style={{ background: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.3)', color: '#a5b4fc', marginBottom: 20 }}>
+                      🔗 Connect your wallet to battle with your Pokémon NFTs
+                      <button className="wallet-btn" style={{ marginLeft: 'auto' }} onClick={connectWallet}>Connect Wallet</button>
+                    </div>
+                  )}
+                  <div className="battle-select-grid">
+                    {pokemons.filter(p => ownedPokemonIds.has(p.pokemonId)).map(p => (
+                      <div
+                        key={p.pokemonId}
+                        className={`battle-select-card ${battleSelectedItem?.name === p.name ? 'selected' : ''}`}
+                        onClick={() => setBattleSelectedItem(p)}
+                      >
+                        <img src={p.officialArtworkUrl} alt={p.displayName} onError={(e) => { e.currentTarget.src = p.imageUrl }} />
+                        <div className="battle-select-name">{p.displayName}</div>
+                        <div className="type-badges" style={{ justifyContent: 'center' }}>
+                          {p.types.slice(0, 2).map(t => (
+                            <span key={t} className="type-badge" style={{ background: typeColors[t] || '#555', fontSize: 9 }}>{t}</span>
+                          ))}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>HP {p.stats.hp}</div>
+                      </div>
+                    ))}
+                    {ownedPokemonIds.size === 0 && (
+                      <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)', gridColumn: '1/-1' }}>
+                        You don't own any Pokémon yet. Head to the Marketplace to buy some!
+                      </div>
+                    )}
+                  </div>
+                  {battleSelectedItem && (
+                    <div className="battle-actions" style={{ marginTop: 20 }}>
+                      <button className="btn-battle-start" style={{ background: 'linear-gradient(135deg,#8b5cf6,#6366f1)' }} onClick={joinMultiQueue} disabled={battleLoading}>
+                        {battleLoading ? 'Connecting...' : '🌐 Find Opponent'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {battleMode === 'multi' && multiState === 'queued' && (
+                <div style={{ textAlign: 'center', padding: 48 }}>
+                  <div className="spinner" style={{ margin: '0 auto 24px' }} />
+                  <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>🌐 Searching for Opponent...</div>
+                  <div style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>Waiting in matchmaking queue. This may take a moment.</div>
+                  <button className="btn-secondary" onClick={resetMode}>Cancel</button>
+                </div>
+              )}
+
+              {battleMode === 'multi' && multiState === 'fighting' && multiMyPokemon && multiOppPokemon && (
+                <div className="battle-arena">
+                  <div style={{ textAlign: 'center', marginBottom: 8 }}>
+                    <span style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc', borderRadius: 20, padding: '3px 14px', fontSize: 12, fontWeight: 600 }}>
+                      👥 Multiplayer Battle
+                    </span>
+                  </div>
+                  <div className="battle-field">
+                    <div className="battle-zone opponent">
+                      <div className="battle-pokemon-info">
+                        <div className="battle-pokemon-name">{multiOppPokemon.displayName}</div>
+                        <div className="hp-bar-track">
+                          <div className="hp-bar-fill" style={{
+                            width: `${(multiOppHP / multiMaxOppHP) * 100}%`,
+                            background: getHpColor((multiOppHP / multiMaxOppHP) * 100),
+                          }} />
+                        </div>
+                        <div className="hp-label">{multiOppHP} / {multiMaxOppHP} HP</div>
+                      </div>
+                      <img className="battle-pokemon-img" src={multiOppPokemon.officialArtworkUrl || `https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/other/official-artwork/${multiOppPokemon.pokemonId}.png`} alt={multiOppPokemon.displayName} />
+                    </div>
+                    <div className="battle-vs">
+                      <div className="type-badges">
+                        {multiOppPokemon.types.map((t: string) => (
+                          <span key={t} className="type-badge" style={{ background: typeColors[t] || '#555', fontSize: 11 }}>{t}</span>
+                        ))}
+                      </div>
+                      <div className="vs-badge">VS</div>
+                      <div className="type-badges">
+                        {multiMyPokemon.types.map(t => (
+                          <span key={t} className="type-badge" style={{ background: typeColors[t] || '#555', fontSize: 11 }}>{t}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="battle-zone player">
+                      <div className="battle-pokemon-info">
+                        <div className="battle-pokemon-name">{multiMyPokemon.displayName}</div>
+                        <div className="hp-bar-track">
+                          <div className="hp-bar-fill" style={{
+                            width: `${(multiMyHP / multiMaxMyHP) * 100}%`,
+                            background: getHpColor((multiMyHP / multiMaxMyHP) * 100),
+                          }} />
+                        </div>
+                        <div className="hp-label" style={{ textAlign: 'right' }}>{multiMyHP} / {multiMaxMyHP} HP</div>
+                      </div>
+                      <img className="battle-pokemon-img" src={multiMyPokemon.officialArtworkUrl} alt={multiMyPokemon.displayName} />
+                    </div>
+                  </div>
+                  <div className="battle-log">
+                    {multiLog.slice(-6).map((entry, i) => (
+                      <div key={i} className={`battle-log-entry ${entry.type}`}>{entry.text}</div>
+                    ))}
+                  </div>
+                  {!multiMyTurn ? (
+                    <div className="move-buttons" style={{ justifyContent: 'center', alignItems: 'center' }}>
+                      <div style={{ color: 'var(--text-secondary)', fontSize: 14, padding: '12px 0' }}>⏳ Waiting for opponent's move...</div>
+                    </div>
+                  ) : (
+                    <div className="move-buttons">
+                      {multiMyPokemon.moves.length > 0 ? (
+                        multiMyPokemon.moves.map((move, i) => (
+                          <button key={i} className="move-btn" onClick={() => executeMultiMove(move)}>
+                            <div className="move-btn-name">{move.displayName}</div>
+                            <div className="move-btn-meta">
+                              <span className="type-badge" style={{ background: typeColors[move.type] || '#555', fontSize: 9, marginRight: 4 }}>{move.type}</span>
+                              <span className="move-power">PWR {move.power}</span>
+                              <span style={{ color: 'var(--text-muted)' }}> | {move.accuracy}% ACC</span>
+                            </div>
+                          </button>
+                        ))
+                      ) : (
+                        <button className="move-btn" onClick={() => executeMultiMove({ name: 'tackle', displayName: 'Tackle', power: 40, accuracy: 100, type: 'normal', damageClass: 'physical' })}>
+                          <div className="move-btn-name">Tackle</div>
+                          <div className="move-btn-meta">Normal | PWR 40 | 100% ACC</div>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {battleMode === 'multi' && multiState === 'result' && (
+                <div className="battle-arena">
+                  <div className="battle-result">
+                    <div className="battle-result-emoji">{multiWinner === 'you' ? '🏆' : '💀'}</div>
+                    <div className="battle-result-title">{multiWinner === 'you' ? 'Victory!' : 'Defeated!'}</div>
+                    <div className="battle-result-subtitle">
+                      {multiLog[multiLog.length - 1]?.text}
+                    </div>
+                    <div className="battle-result-actions">
+                      <button className="btn-battle-start" style={{ background: 'linear-gradient(135deg,#8b5cf6,#6366f1)' }} onClick={() => { disconnectSocket(); setMultiState('idle'); setBattleSelectedItem(null); setMultiLog([]); }}>Play Again</button>
+                      <button className="btn-secondary" onClick={resetMode}>Change Mode</button>
                     </div>
                   </div>
                 </div>
