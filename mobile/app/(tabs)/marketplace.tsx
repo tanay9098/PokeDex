@@ -29,7 +29,7 @@ const RARITY_LABELS = ['', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
 const PRICES = ['', '0.01', '0.05', '0.25', '1.50', '5.00'];
 
 // Marketplace wallet receives MATIC payments
-const MARKETPLACE_WALLET = '0x000000000000000000000000000000000000dEaD' as `0x${string}`;
+const MARKETPLACE_WALLET = '0x11b3eb6DaE506837ef1d5cc7Bb3F896AbE854838' as `0x${string}`;
 
 export const OWNED_STORAGE_KEY = 'ownedPokemonIds';
 
