@@ -1,3 +1,5 @@
+> Pokémon and all Pokémon character names are trademarks of Nintendo. This project is intended for educational purposes only.
+
 # PokeDex — Pokemon NFT Marketplace
 
 A full-stack Pokemon NFT marketplace where you can collect, trade, and battle Pokemon as digital collectibles (NFTs) on the Polygon blockchain. Available as both a web app and android mobile app.
