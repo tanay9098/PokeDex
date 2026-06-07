@@ -25,9 +25,9 @@ PokeDex lets you:
 1. Open the app in your browser
 2. Click **Connect Wallet** and approve the connection in MetaMask
 3. Switch your wallet network to **Polygon Amoy Testnet** (the app will prompt you)
-4. Browse Pokemon and click **Mint** to create your first NFT — this costs a small amount of MATIC
+4. Browse Pokemon and click **Buy** to add it to your collection — this sends a small amount of MATIC to the platform. Note: ownership is tracked locally in your browser; full on-chain NFT minting is planned for a future release.
 5. View your collection in the **My Collection** tab
-6. List Pokemon for sale or make offers on others' Pokemon in the **Marketplace** tab
+6. Simulate listings and offers in the **Marketplace** tab
 7. Go to the **Battle** tab — only the Pokémon you own appear here for selection
 
 ### How to use the Mobile App
@@ -40,14 +40,15 @@ PokeDex lets you:
 
 ### Costs
 
-| Action | Estimated Cost |
-|---|---|
-| Mint a Pokemon NFT | ~0.01 MATIC + gas |
-| List on Marketplace | Gas fee only |
-| Buy a Pokemon | Listed price + 2.5% platform fee + gas |
-| Battle | Gas fee only |
+| Action | Estimated Cost | Notes |
+|---|---|---|
+| Buy a Pokemon | ~0.01 MATIC | Sent to platform; ownership tracked locally |
+| Marketplace | Gas fee only | Simulated locally (no on-chain transfer) |
+| Battle | Free | No transaction required |
 
-> Use the **Amoy Testnet** with free test MATIC to try everything for free before spending real money.
+> **Note:** This is a demonstration app. Pokemon ownership is stored in your browser's local storage, not on-chain. Clearing browser data or switching devices will reset your collection. Full NFT minting and on-chain trading are planned for a future release.
+>
+> Use the **Amoy Testnet** with free test MATIC to try the purchase flow for free.
 
 ---
 
@@ -61,7 +62,7 @@ PokeDex lets you:
 | Blockchain | Polygon (Amoy Testnet / Mainnet) |
 | Web Frontend | React 19, TypeScript, Vite 5, ethers.js v6 |
 | Mobile App | Expo ~54, React Native 0.81, Expo Router |
-| Data | PokéAPI (pokemon data), Pinata (IPFS metadata) |
+| Data | PokéAPI (pokemon data), Pinata (IPFS metadata, planned) |
 
 ### Project Structure
 
@@ -186,7 +187,7 @@ npm run web       # Run in browser
 **PokemonNFT.sol** — ERC-721 contract
 - Mint Pokemon NFTs with on-chain stats (HP, Attack, Defense, Speed)
 - Battle mechanics built directly into the contract
-- Metadata stored on IPFS via Pinata
+- Contract accepts `ipfsHash` for metadata storage; Pinata/IPFS upload integration is planned
 
 ### Battle Arena
 
