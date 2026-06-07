@@ -36,8 +36,7 @@ PokeDex lets you:
 1. Download and open the app on your device
 2. Browse Pokemon from the home screen
 3. Tap any Pokemon for details
-4. Connect your wallet to mint, trade, or battle
-5. Navigate using the bottom tabs: **Home**, **Collection**, **Marketplace**, **Battle**
+4. Navigate using the bottom tabs: **Home**, **Collection**, **Marketplace**, **Battle**
 
 ### Costs
 
