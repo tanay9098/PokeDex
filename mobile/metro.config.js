@@ -7,7 +7,10 @@ config.resolver.unstable_conditionNames = ['require', 'react-native'];
 
 // Mock native wallet SDKs that thirdweb bundles but we don't use
 const emptyModule = require.resolve('./emptyModule.js');
-const MOCKED_MODULES = ['@coinbase/wallet-mobile-sdk'];
+const MOCKED_MODULES = [
+  '@coinbase/wallet-mobile-sdk',
+  '@mobile-wallet-protocol/client',
+];
 
 const originalResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
