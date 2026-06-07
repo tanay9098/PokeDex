@@ -1,10 +1,9 @@
 # PokeDex — Pokemon NFT Marketplace
 
-A full-stack Pokemon NFT marketplace where you can collect, trade, and battle Pokemon as digital collectibles (NFTs) on the Polygon blockchain. Available as both a web app and mobile app.
+A full-stack Pokemon NFT marketplace where you can collect, trade, and battle Pokemon as digital collectibles (NFTs) on the Polygon blockchain. Available as both a web app and android mobile app.
 
 ---
 
-## For Non-Developers (Regular Users)
 
 ### What is this?
 
@@ -18,7 +17,7 @@ PokeDex lets you:
 
 1. **A crypto wallet** — Install [MetaMask](https://metamask.io) (browser extension) or use any Polygon-compatible wallet
 2. **MATIC tokens** — The currency used on the Polygon network. You can get free test MATIC from the [Polygon Amoy Faucet](https://faucet.polygon.technology/) for testing
-3. **A browser or mobile device** — The app works on web and mobile (iOS/Android)
+3. **A browser or mobile device** — The app works on web and mobile (android)
 
 ### How to use the Web App
 
@@ -52,7 +51,7 @@ PokeDex lets you:
 
 ---
 
-## For Developers
+
 
 ### Tech Stack
 
@@ -232,7 +231,7 @@ The Battle Arena in the web app (`web/src/App.tsx`) works as follows:
 - Smart contracts use OpenZeppelin's `ReentrancyGuard` and `Ownable`
 - Never share or commit your private key
 - Audit contracts before mainnet deployment
-- Use testnet for all development and testing
+- Use testnet for all development, testing as well as adding deployement address publically(never do it on mainnet)
 
 ---
 
