@@ -15,7 +15,7 @@
       },
        "env": {
     "EXPO_PUBLIC_API_URL": "https://pokeapi.co/api/v2/pokemon?limit=20",
-    "EXPO_PUBLIC_WC_PROJECT_ID": "b9c35d081890ef00eeaa6807492c6163"
+    "EXPO_PUBLIC_THIRDWEB_CLIENT_ID": "2656cde2783bea236fbf8cd2fffd9e27"
   }
 
     },
