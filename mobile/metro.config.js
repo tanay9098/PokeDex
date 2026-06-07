@@ -9,6 +9,7 @@ config.resolver.unstable_conditionNames = ['require', 'react-native'];
 const emptyModule = require.resolve('./emptyModule.js');
 const MOCKED_MODULES = [
   '@coinbase/wallet-mobile-sdk',
+  '@coinbase/wallet-mobile-sdk/build/WalletMobileSDKEVMProvider',
   '@mobile-wallet-protocol/client',
 ];
 
