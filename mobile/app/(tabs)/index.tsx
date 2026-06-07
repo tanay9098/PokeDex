@@ -217,7 +217,7 @@ export default function HomeScreen() {
         ListHeaderComponent={
           featured ? (
             <View style={styles.featuredSection}>
-              <Text style={styles.sectionLabel}>⭐ Top Pokémon</Text>
+              <Text style={[styles.sectionLabel, { marginBottom: 10, marginTop: 4 }]}>⭐ Top Pokémon</Text>
               <Link href={{ pathname: "/detailed", params: { name: featured.name } }} asChild>
                 <Pressable style={styles.featuredCard}>
                   <View style={[styles.featuredGlow, { backgroundColor: TYPE_COLORS[featured.types[0]] || '#6366f1' }]} />
@@ -226,34 +226,66 @@ export default function HomeScreen() {
                       <Text style={styles.metaLabel}>Rarity Lvl</Text>
                       <Text style={styles.metaValue}>{featured.rarity}.{Math.floor(Math.random() * 9) + 1} ▲</Text>
                     </View>
-                    <View style={[styles.rarityBadge, { borderColor: RARITY_COLORS[featured.rarity] }]}>
-                      <Text style={[styles.rarityText, { color: RARITY_COLORS[featured.rarity] }]}>
-                        ★ {RARITY_LABELS[featured.rarity]}
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.metaLabel}>NFT Type</Text>
+                      <Text style={[styles.metaValue, { color: RARITY_COLORS[featured.rarity] }]}>
+                        {RARITY_LABELS[featured.rarity]}
                       </Text>
                     </View>
                   </View>
                   <Image source={{ uri: featured.officialArtworkUrl }} style={styles.featuredImage} resizeMode="contain" />
                   <View style={styles.featuredBody}>
                     <Text style={styles.featuredName}>{featured.displayName}</Text>
-                    <View style={styles.typesRow}>
+                    <View style={[styles.typesRow, { marginBottom: 8 }]}>
+                      <View style={[styles.rarityBadge, { borderColor: RARITY_COLORS[featured.rarity] }]}>
+                        <Text style={[styles.rarityText, { color: RARITY_COLORS[featured.rarity] }]}>
+                          ★ {RARITY_LABELS[featured.rarity]}
+                        </Text>
+                      </View>
                       {featured.types.map(t => (
                         <View key={t} style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[t] || '#555' }]}>
                           <Text style={styles.typeText}>{t}</Text>
                         </View>
                       ))}
                     </View>
-                    <View style={styles.statsRow}>
-                      {Object.entries(featured.stats).map(([k, v]) => (
-                        <View key={k} style={styles.miniStat}>
-                          <Text style={styles.miniStatLabel}>{k.slice(0, 3).toUpperCase()}</Text>
-                          <Text style={styles.miniStatValue}>{v}</Text>
+                    <View style={styles.statBars}>
+                      {[
+                        ['HP', featured.stats.hp],
+                        ['ATTAC', featured.stats.attack],
+                        ['DEFEN', featured.stats.defense],
+                        ['SPATK', featured.stats.spAtk],
+                        ['SPDEF', featured.stats.spDef],
+                        ['SPEED', featured.stats.speed],
+                      ].map(([label, val]) => (
+                        <View key={label as string} style={styles.statBarRow}>
+                          <Text style={styles.statBarLabel}>{label}</Text>
+                          <View style={styles.statBarTrack}>
+                            <View style={[styles.statBarFill, {
+                              width: `${Math.min(((val as number) / 255) * 100, 100)}%` as any,
+                              backgroundColor: TYPE_COLORS[featured.types[0]] || '#6366f1',
+                            }]} />
+                          </View>
+                          <Text style={styles.statBarValue}>{val}</Text>
                         </View>
                       ))}
+                    </View>
+                    <View style={styles.featuredActions}>
+                      <Pressable style={styles.btnGhost}>
+                        <Text style={styles.btnGhostText}>View History</Text>
+                      </Pressable>
+                      <Pressable style={styles.btnPrimary}>
+                        <Text style={styles.btnPrimaryText}>Buy Now</Text>
+                      </Pressable>
                     </View>
                   </View>
                 </Pressable>
               </Link>
-              <Text style={styles.sectionLabel}>🔥 Rare Pokémon</Text>
+              <View style={styles.sectionRow}>
+                <Text style={styles.sectionLabel}>🔥 Rare Pokémon</Text>
+                <Pressable style={styles.viewAllBtn}>
+                  <Text style={styles.viewAllText}>View All</Text>
+                </Pressable>
+              </View>
             </View>
           ) : null
         }
@@ -290,7 +322,7 @@ const styles = StyleSheet.create({
 
   // Featured card
   featuredSection: { marginBottom: 16 },
-  sectionLabel: { fontSize: 11, fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10, marginTop: 4 },
+  sectionLabel: { fontSize: 11, fontWeight: '700', color: '#475569', textTransform: 'uppercase' as const, letterSpacing: 1.5 },
   featuredCard: { backgroundColor: '#111827', borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', marginBottom: 16 },
   featuredGlow: { position: 'absolute', width: 200, height: 200, borderRadius: 100, opacity: 0.2, top: 30, alignSelf: 'center', filter: 'blur(40px)' } as any,
   featuredHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, paddingBottom: 0, alignItems: 'flex-start' },
@@ -301,10 +333,16 @@ const styles = StyleSheet.create({
   featuredImage: { width: '100%', height: 200 },
   featuredBody: { padding: 16, paddingTop: 8 },
   featuredName: { fontSize: 24, fontWeight: '800', color: '#f1f5f9', textTransform: 'capitalize', marginBottom: 8 },
-  statsRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  miniStat: { flex: 1, backgroundColor: '#0d1117', borderRadius: 8, padding: 6, alignItems: 'center' },
-  miniStatLabel: { fontSize: 9, color: '#475569', fontWeight: '700', textTransform: 'uppercase' },
-  miniStatValue: { fontSize: 13, fontWeight: '800', color: '#f1f5f9', marginTop: 2 },
+  sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, marginTop: 4 },
+  viewAllBtn: { paddingHorizontal: 12, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 8, backgroundColor: '#111827' },
+  viewAllText: { color: '#94a3b8', fontSize: 12, fontWeight: '600' },
+  statBars: { gap: 6, marginTop: 8 },
+  statBarRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  statBarLabel: { fontSize: 10, color: '#475569', fontWeight: '700', width: 42, textTransform: 'uppercase' as const },
+  statBarTrack: { flex: 1, height: 6, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' },
+  statBarFill: { height: '100%', borderRadius: 3 },
+  statBarValue: { fontSize: 11, color: '#94a3b8', fontWeight: '600', width: 28, textAlign: 'right' as const },
+  featuredActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
 
   // Pokemon card
   card: { flex: 1, backgroundColor: '#111827', borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', maxWidth: '49%' },
