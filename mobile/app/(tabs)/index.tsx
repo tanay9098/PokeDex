@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator, FlatList, Image, Pressable,
+  ActivityIndicator, Alert, FlatList, Image, Pressable,
   ScrollView, StyleSheet, Text, TextInput, View,
 } from "react-native";
 import { Link } from "expo-router";
+import { addOwnedId, RARITY_LABELS as MARKETPLACE_RARITY_LABELS } from "./marketplace";
 
 interface PokemonItem {
   pokemonId: number;
@@ -64,67 +65,86 @@ async function fetchPokemonList(limit = 20, offset = 0): Promise<PokemonItem[]> 
   return details.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<PokemonItem>).value);
 }
 
+const PRICES = ['', '0.01', '0.05', '0.25', '1.50', '5.00'];
+
+function handleBuyPokemon(item: PokemonItem) {
+  const price = PRICES[item.rarity];
+  const usd = (parseFloat(price) * 0.8).toFixed(2);
+  Alert.alert(
+    'Confirm Purchase',
+    `Buy ${item.displayName} for ${price} MATIC ($${usd})?`,
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Buy',
+        onPress: async () => {
+          try {
+            await addOwnedId(item.pokemonId);
+            Alert.alert('Purchase Successful!', `${item.displayName} has been added to your collection.`);
+          } catch {
+            Alert.alert('Error', 'Purchase failed. Please try again.');
+          }
+        },
+      },
+    ]
+  );
+}
+
 function PokemonCard({ item }: { item: PokemonItem }) {
   const primaryType = item.types[0];
   const color = TYPE_COLORS[primaryType] || '#6366f1';
-  const rarityColor = RARITY_COLORS[item.rarity];
 
   return (
-    <Link href={{ pathname: "/detailed", params: { name: item.name } }} asChild>
-      <Pressable style={({ pressed }) => [styles.card, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}>
-        {/* Card glow bg */}
-        <View style={[styles.cardGlow, { backgroundColor: color }]} />
-
-        {/* Header row */}
-        <View style={styles.cardHeader}>
-          <View>
-            <Text style={styles.cardOwnerLabel}>Owned by</Text>
-            <Text style={styles.cardOwnerId}>{String(item.pokemonId).padStart(4, '0')}EX</Text>
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.cardOwnerLabel}>Created by</Text>
-            <Text style={styles.cardOwnerId}>{item.pokemonId}API</Text>
-          </View>
-        </View>
-
-        {/* Artwork */}
-        <View style={styles.artworkContainer}>
-          <Image
-            source={{ uri: item.officialArtworkUrl }}
-            style={styles.artwork}
-            resizeMode="contain"
-            onError={(e) => { (e.target as any).source = { uri: item.imageUrl }; }}
-          />
-        </View>
-
-        {/* Info */}
-        <View style={styles.cardBody}>
-          <View style={styles.typesRow}>
-            {item.types.map(t => (
-              <View key={t} style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[t] || '#555' }]}>
-                <Text style={styles.typeText}>{t}</Text>
-              </View>
-            ))}
-          </View>
-          <Text style={styles.pokemonName}>{item.displayName}</Text>
-          <View style={styles.priceRow}>
+    <View style={styles.card}>
+      <Link href={{ pathname: "/detailed", params: { name: item.name } }} asChild>
+        <Pressable style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}>
+          <View style={[styles.cardGlow, { backgroundColor: color }]} />
+          <View style={styles.cardHeader}>
             <View>
-              <Text style={styles.priceLabel}>MATIC {['', '0.01', '0.05', '0.25', '1.50', '5.00'][item.rarity]} × 1</Text>
-              <Text style={styles.priceUsd}>(${(parseFloat(['', '0.01', '0.05', '0.25', '1.50', '5.00'][item.rarity]) * 0.8).toFixed(2)})</Text>
+              <Text style={styles.cardOwnerLabel}>Owned by</Text>
+              <Text style={styles.cardOwnerId}>{String(item.pokemonId).padStart(4, '0')}EX</Text>
             </View>
-            <Text style={styles.pokemonId}>#{String(item.pokemonId).padStart(4, '0')}</Text>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.cardOwnerLabel}>Created by</Text>
+              <Text style={styles.cardOwnerId}>{item.pokemonId}API</Text>
+            </View>
           </View>
-          <View style={styles.cardActions}>
-            <Pressable style={styles.btnGhost} onPress={() => {}}>
-              <Text style={styles.btnGhostText}>View History</Text>
-            </Pressable>
-            <Pressable style={styles.btnPrimary} onPress={() => {}}>
-              <Text style={styles.btnPrimaryText}>Buy Now</Text>
-            </Pressable>
+          <View style={styles.artworkContainer}>
+            <Image
+              source={{ uri: item.officialArtworkUrl }}
+              style={styles.artwork}
+              resizeMode="contain"
+              onError={(e) => { (e.target as any).source = { uri: item.imageUrl }; }}
+            />
           </View>
-        </View>
-      </Pressable>
-    </Link>
+          <View style={styles.cardBody}>
+            <View style={styles.typesRow}>
+              {item.types.map(t => (
+                <View key={t} style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[t] || '#555' }]}>
+                  <Text style={styles.typeText}>{t}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.pokemonName}>{item.displayName}</Text>
+            <View style={styles.priceRow}>
+              <View>
+                <Text style={styles.priceLabel}>MATIC {PRICES[item.rarity]} × 1</Text>
+                <Text style={styles.priceUsd}>(${(parseFloat(PRICES[item.rarity]) * 0.8).toFixed(2)})</Text>
+              </View>
+              <Text style={styles.pokemonId}>#{String(item.pokemonId).padStart(4, '0')}</Text>
+            </View>
+          </View>
+        </Pressable>
+      </Link>
+      <View style={[styles.cardActions, { paddingHorizontal: 10, paddingBottom: 10 }]}>
+        <Pressable style={styles.btnGhost} onPress={() => {}}>
+          <Text style={styles.btnGhostText}>View History</Text>
+        </Pressable>
+        <Pressable style={styles.btnPrimary} onPress={() => handleBuyPokemon(item)}>
+          <Text style={styles.btnPrimaryText}>Buy Now</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -218,68 +238,70 @@ export default function HomeScreen() {
           featured ? (
             <View style={styles.featuredSection}>
               <Text style={[styles.sectionLabel, { marginBottom: 10, marginTop: 4 }]}>⭐ Top Pokémon</Text>
-              <Link href={{ pathname: "/detailed", params: { name: featured.name } }} asChild>
-                <Pressable style={styles.featuredCard}>
-                  <View style={[styles.featuredGlow, { backgroundColor: TYPE_COLORS[featured.types[0]] || '#6366f1' }]} />
-                  <View style={styles.featuredHeader}>
-                    <View>
-                      <Text style={styles.metaLabel}>Rarity Lvl</Text>
-                      <Text style={styles.metaValue}>{featured.rarity}.{Math.floor(Math.random() * 9) + 1} ▲</Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.metaLabel}>NFT Type</Text>
-                      <Text style={[styles.metaValue, { color: RARITY_COLORS[featured.rarity] }]}>
-                        {RARITY_LABELS[featured.rarity]}
-                      </Text>
-                    </View>
-                  </View>
-                  <Image source={{ uri: featured.officialArtworkUrl }} style={styles.featuredImage} resizeMode="contain" />
-                  <View style={styles.featuredBody}>
-                    <Text style={styles.featuredName}>{featured.displayName}</Text>
-                    <View style={[styles.typesRow, { marginBottom: 8 }]}>
-                      <View style={[styles.rarityBadge, { borderColor: RARITY_COLORS[featured.rarity] }]}>
-                        <Text style={[styles.rarityText, { color: RARITY_COLORS[featured.rarity] }]}>
-                          ★ {RARITY_LABELS[featured.rarity]}
+              <View style={styles.featuredCard}>
+                <Link href={{ pathname: "/detailed", params: { name: featured.name } }} asChild>
+                  <Pressable>
+                    <View style={[styles.featuredGlow, { backgroundColor: TYPE_COLORS[featured.types[0]] || '#6366f1' }]} />
+                    <View style={styles.featuredHeader}>
+                      <View>
+                        <Text style={styles.metaLabel}>Rarity Lvl</Text>
+                        <Text style={styles.metaValue}>{featured.rarity}.{Math.floor(Math.random() * 9) + 1} ▲</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.metaLabel}>NFT Type</Text>
+                        <Text style={[styles.metaValue, { color: RARITY_COLORS[featured.rarity] }]}>
+                          {RARITY_LABELS[featured.rarity]}
                         </Text>
                       </View>
-                      {featured.types.map(t => (
-                        <View key={t} style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[t] || '#555' }]}>
-                          <Text style={styles.typeText}>{t}</Text>
-                        </View>
-                      ))}
                     </View>
-                    <View style={styles.statBars}>
-                      {[
-                        ['HP', featured.stats.hp],
-                        ['ATTAC', featured.stats.attack],
-                        ['DEFEN', featured.stats.defense],
-                        ['SPATK', featured.stats.spAtk],
-                        ['SPDEF', featured.stats.spDef],
-                        ['SPEED', featured.stats.speed],
-                      ].map(([label, val]) => (
-                        <View key={label as string} style={styles.statBarRow}>
-                          <Text style={styles.statBarLabel}>{label}</Text>
-                          <View style={styles.statBarTrack}>
-                            <View style={[styles.statBarFill, {
-                              width: `${Math.min(((val as number) / 255) * 100, 100)}%` as any,
-                              backgroundColor: TYPE_COLORS[featured.types[0]] || '#6366f1',
-                            }]} />
+                    <Image source={{ uri: featured.officialArtworkUrl }} style={styles.featuredImage} resizeMode="contain" />
+                    <View style={styles.featuredBody}>
+                      <Text style={styles.featuredName}>{featured.displayName}</Text>
+                      <View style={[styles.typesRow, { marginBottom: 8 }]}>
+                        <View style={[styles.rarityBadge, { borderColor: RARITY_COLORS[featured.rarity] }]}>
+                          <Text style={[styles.rarityText, { color: RARITY_COLORS[featured.rarity] }]}>
+                            ★ {RARITY_LABELS[featured.rarity]}
+                          </Text>
+                        </View>
+                        {featured.types.map(t => (
+                          <View key={t} style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[t] || '#555' }]}>
+                            <Text style={styles.typeText}>{t}</Text>
                           </View>
-                          <Text style={styles.statBarValue}>{val}</Text>
-                        </View>
-                      ))}
+                        ))}
+                      </View>
+                      <View style={styles.statBars}>
+                        {[
+                          ['HP', featured.stats.hp],
+                          ['ATTAC', featured.stats.attack],
+                          ['DEFEN', featured.stats.defense],
+                          ['SPATK', featured.stats.spAtk],
+                          ['SPDEF', featured.stats.spDef],
+                          ['SPEED', featured.stats.speed],
+                        ].map(([label, val]) => (
+                          <View key={label as string} style={styles.statBarRow}>
+                            <Text style={styles.statBarLabel}>{label}</Text>
+                            <View style={styles.statBarTrack}>
+                              <View style={[styles.statBarFill, {
+                                width: `${Math.min(((val as number) / 255) * 100, 100)}%` as any,
+                                backgroundColor: TYPE_COLORS[featured.types[0]] || '#6366f1',
+                              }]} />
+                            </View>
+                            <Text style={styles.statBarValue}>{val}</Text>
+                          </View>
+                        ))}
+                      </View>
                     </View>
-                    <View style={styles.featuredActions}>
-                      <Pressable style={styles.btnGhost}>
-                        <Text style={styles.btnGhostText}>View History</Text>
-                      </Pressable>
-                      <Pressable style={styles.btnPrimary}>
-                        <Text style={styles.btnPrimaryText}>Buy Now</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                </Pressable>
-              </Link>
+                  </Pressable>
+                </Link>
+                <View style={[styles.featuredActions, { paddingHorizontal: 16, paddingBottom: 16 }]}>
+                  <Pressable style={styles.btnGhost}>
+                    <Text style={styles.btnGhostText}>View History</Text>
+                  </Pressable>
+                  <Pressable style={styles.btnPrimary} onPress={() => handleBuyPokemon(featured)}>
+                    <Text style={styles.btnPrimaryText}>Buy Now</Text>
+                  </Pressable>
+                </View>
+              </View>
               <View style={styles.sectionRow}>
                 <Text style={styles.sectionLabel}>🔥 Rare Pokémon</Text>
                 <Pressable style={styles.viewAllBtn}>
