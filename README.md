@@ -238,3 +238,7 @@ The Battle Arena in the web app (`web/src/App.tsx`) works as follows:
 ## License
 
 MIT
+
+---
+
+> Pokémon and all Pokémon character names are trademarks of Nintendo. This project is intended for educational purposes only.
