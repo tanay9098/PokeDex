@@ -81,8 +81,9 @@ function PokemonCard({ item }: { item: PokemonItem }) {
             <Text style={styles.cardOwnerLabel}>Owned by</Text>
             <Text style={styles.cardOwnerId}>{String(item.pokemonId).padStart(4, '0')}EX</Text>
           </View>
-          <View style={[styles.rarityBadge, { borderColor: rarityColor }]}>
-            <Text style={[styles.rarityText, { color: rarityColor }]}>★ {RARITY_LABELS[item.rarity]}</Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.cardOwnerLabel}>Created by</Text>
+            <Text style={styles.cardOwnerId}>{item.pokemonId}API</Text>
           </View>
         </View>
 
@@ -107,8 +108,19 @@ function PokemonCard({ item }: { item: PokemonItem }) {
           </View>
           <Text style={styles.pokemonName}>{item.displayName}</Text>
           <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>MATIC {['', '0.01', '0.05', '0.25', '1.50', '5.00'][item.rarity]}</Text>
+            <View>
+              <Text style={styles.priceLabel}>MATIC {['', '0.01', '0.05', '0.25', '1.50', '5.00'][item.rarity]} × 1</Text>
+              <Text style={styles.priceUsd}>(${(parseFloat(['', '0.01', '0.05', '0.25', '1.50', '5.00'][item.rarity]) * 0.8).toFixed(2)})</Text>
+            </View>
             <Text style={styles.pokemonId}>#{String(item.pokemonId).padStart(4, '0')}</Text>
+          </View>
+          <View style={styles.cardActions}>
+            <Pressable style={styles.btnGhost} onPress={() => {}}>
+              <Text style={styles.btnGhostText}>View History</Text>
+            </Pressable>
+            <Pressable style={styles.btnPrimary} onPress={() => {}}>
+              <Text style={styles.btnPrimaryText}>Buy Now</Text>
+            </Pressable>
           </View>
         </View>
       </Pressable>
@@ -307,9 +319,15 @@ const styles = StyleSheet.create({
   typeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
   typeText: { color: '#fff', fontSize: 9, fontWeight: '700', textTransform: 'capitalize' },
   pokemonName: { fontSize: 14, fontWeight: '700', color: '#f1f5f9', textTransform: 'capitalize', marginBottom: 6 },
-  priceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  priceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   priceLabel: { fontSize: 11, fontWeight: '600', color: '#94a3b8' },
+  priceUsd: { fontSize: 10, color: '#475569' },
   pokemonId: { fontSize: 10, color: '#475569', fontFamily: 'monospace' },
+  cardActions: { flexDirection: 'row', gap: 6 },
+  btnGhost: { flex: 1, padding: 7, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 8, alignItems: 'center' },
+  btnGhostText: { color: '#94a3b8', fontSize: 10, fontWeight: '600' },
+  btnPrimary: { flex: 1, padding: 7, backgroundColor: '#6366f1', borderRadius: 8, alignItems: 'center' },
+  btnPrimaryText: { color: '#fff', fontSize: 10, fontWeight: '700' },
 
   loadMoreBtn: { margin: 16, marginTop: 4, backgroundColor: '#111827', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 24, padding: 14, alignItems: 'center' },
   loadMoreText: { color: '#94a3b8', fontSize: 14, fontWeight: '600' },

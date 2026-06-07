@@ -45,20 +45,27 @@ async function fetchPokemonById(id: number): Promise<PokemonItem> {
   };
 }
 
+const PRICES = ['', '0.01', '0.05', '0.25', '1.50', '5.00'];
+
 function CollectionCard({ item }: { item: PokemonItem }) {
   const color = TYPE_COLORS[item.types[0]] || '#6366f1';
   const rc = RARITY_COLORS[item.rarity];
-  const totalStats = Object.values(item.stats).reduce((a, b) => a + b, 0);
+  const price = PRICES[item.rarity];
+  const usd = (parseFloat(price) * 0.8).toFixed(2);
 
   return (
     <Link href={{ pathname: "/detailed", params: { name: item.name } }} asChild>
       <Pressable style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}>
         <View style={[styles.cardBg, { backgroundColor: color }]} />
         <View style={styles.cardTop}>
-          <View style={[styles.rarityBadge, { borderColor: rc }]}>
-            <Text style={[styles.rarityText, { color: rc }]}>★ {RARITY_LABELS[item.rarity]}</Text>
+          <View>
+            <Text style={styles.ownerLabel}>Owned by</Text>
+            <Text style={styles.ownerId}>{String(item.pokemonId).padStart(4, '0')}EX</Text>
           </View>
-          <Text style={styles.idText}>#{String(item.pokemonId).padStart(4, '0')}</Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.ownerLabel}>Created by</Text>
+            <Text style={styles.ownerId}>{item.pokemonId}API</Text>
+          </View>
         </View>
         <Image source={{ uri: item.officialArtworkUrl }} style={styles.artwork} resizeMode="contain" />
         <View style={styles.cardBottom}>
@@ -68,25 +75,17 @@ function CollectionCard({ item }: { item: PokemonItem }) {
                 <Text style={styles.typeText}>{t}</Text>
               </View>
             ))}
+            <View style={[styles.rarityBadge, { borderColor: rc }]}>
+              <Text style={[styles.rarityText, { color: rc }]}>{RARITY_LABELS[item.rarity]}</Text>
+            </View>
           </View>
           <Text style={styles.pokemonName}>{item.displayName}</Text>
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>HP</Text>
-              <Text style={styles.statValue}>{item.stats.hp}</Text>
+          <View style={styles.priceRow}>
+            <View>
+              <Text style={styles.priceLabel}>MATIC {price} × 1</Text>
+              <Text style={styles.priceUsd}>(${usd})</Text>
             </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>ATK</Text>
-              <Text style={styles.statValue}>{item.stats.attack}</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>DEF</Text>
-              <Text style={styles.statValue}>{item.stats.defense}</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>TOT</Text>
-              <Text style={[styles.statValue, { color: '#fbbf24' }]}>{totalStats}</Text>
-            </View>
+            <Text style={styles.idText}>#{String(item.pokemonId).padStart(4, '0')}</Text>
           </View>
         </View>
       </Pressable>
@@ -120,9 +119,6 @@ export default function CollectionScreen() {
   }
 
   const rareCount = items.filter(i => i.rarity >= 4).length;
-  const avgStats = items.length > 0
-    ? Math.round(items.reduce((sum, i) => sum + Object.values(i.stats).reduce((a, b) => a + b, 0), 0) / items.length)
-    : 0;
 
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#6366f1" /></View>;
 
@@ -131,15 +127,11 @@ export default function CollectionScreen() {
       <View style={styles.statsHeader}>
         <View style={styles.statCard}>
           <Text style={styles.statCardValue}>{items.length}</Text>
-          <Text style={styles.statCardLabel}>Total</Text>
+          <Text style={styles.statCardLabel}>Available</Text>
         </View>
         <View style={styles.statCard}>
           <Text style={[styles.statCardValue, { color: '#f59e0b' }]}>{rareCount}</Text>
           <Text style={styles.statCardLabel}>Rare+</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={[styles.statCardValue, { color: '#22c55e' }]}>{avgStats}</Text>
-          <Text style={styles.statCardLabel}>Avg Stats</Text>
         </View>
         <View style={styles.statCard}>
           <Text style={[styles.statCardValue, { color: '#6366f1' }]}>{items.length}</Text>
@@ -180,18 +172,19 @@ const styles = StyleSheet.create({
   gridRow: { gap: 12 },
   card: { flex: 1, backgroundColor: '#111827', borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', maxWidth: '49%' },
   cardBg: { position: 'absolute', width: 100, height: 100, borderRadius: 50, opacity: 0.12, top: 10, alignSelf: 'center' } as any,
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', padding: 10, paddingBottom: 0, alignItems: 'center' },
-  rarityBadge: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 2 },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', padding: 10, paddingBottom: 0, alignItems: 'flex-start' },
+  ownerLabel: { fontSize: 9, color: '#475569', fontWeight: '700', textTransform: 'uppercase' as const },
+  ownerId: { fontSize: 11, color: '#94a3b8', fontWeight: '700', fontFamily: 'monospace' },
+  rarityBadge: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 6, paddingVertical: 2 },
   rarityText: { fontSize: 9, fontWeight: '700' },
   idText: { fontSize: 10, color: '#475569', fontFamily: 'monospace' },
   artwork: { width: '100%', height: 100 },
   cardBottom: { padding: 10, paddingTop: 4 },
-  typesRow: { flexDirection: 'row', gap: 4, marginBottom: 4, flexWrap: 'wrap' },
+  typesRow: { flexDirection: 'row', gap: 4, marginBottom: 4, flexWrap: 'wrap' as const },
   typeBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
-  typeText: { color: '#fff', fontSize: 9, fontWeight: '700', textTransform: 'capitalize' },
-  pokemonName: { fontSize: 13, fontWeight: '700', color: '#f1f5f9', textTransform: 'capitalize', marginBottom: 6 },
-  statsRow: { flexDirection: 'row', gap: 4 },
-  statBox: { flex: 1, backgroundColor: '#0d1117', borderRadius: 6, padding: 4, alignItems: 'center' },
-  statLabel: { fontSize: 8, color: '#475569', fontWeight: '700' },
-  statValue: { fontSize: 11, fontWeight: '800', color: '#f1f5f9', marginTop: 1 },
+  typeText: { color: '#fff', fontSize: 9, fontWeight: '700', textTransform: 'capitalize' as const },
+  pokemonName: { fontSize: 13, fontWeight: '700', color: '#f1f5f9', textTransform: 'capitalize' as const, marginBottom: 6 },
+  priceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  priceLabel: { fontSize: 11, fontWeight: '600', color: '#94a3b8' },
+  priceUsd: { fontSize: 10, color: '#475569' },
 });

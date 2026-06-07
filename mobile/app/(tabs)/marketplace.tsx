@@ -82,8 +82,9 @@ function NFTCard({ item, onBuy, isBuying }: { item: PokemonItem; onBuy: (item: P
             <Text style={styles.ownerLabel}>Owned by</Text>
             <Text style={styles.ownerId}>{String(item.pokemonId).padStart(4, '0')}EX</Text>
           </View>
-          <View style={[styles.rarityBadge, { borderColor: rc }]}>
-            <Text style={[styles.rarityText, { color: rc }]}>★ {RARITY_LABELS[item.rarity]}</Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.ownerLabel}>Created by</Text>
+            <Text style={styles.ownerId}>{item.pokemonId}API</Text>
           </View>
         </View>
         <Image source={{ uri: item.officialArtworkUrl }} style={styles.artwork} resizeMode="contain" />
@@ -94,6 +95,9 @@ function NFTCard({ item, onBuy, isBuying }: { item: PokemonItem; onBuy: (item: P
                 <Text style={styles.typeText}>{t}</Text>
               </View>
             ))}
+            <View style={[styles.rarityBadge, { borderColor: rc }]}>
+              <Text style={[styles.rarityText, { color: rc }]}>{RARITY_LABELS[item.rarity]}</Text>
+            </View>
           </View>
           <Text style={styles.pokemonName}>{item.displayName}</Text>
           <View style={styles.priceRow}>
@@ -173,6 +177,7 @@ export default function MarketplaceScreen() {
 
   return (
     <View style={styles.container}>
+      <Text style={styles.pageHeading}>Pokémon NFT Marketplace</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterRow}>
         {FILTER_TABS.map(f => (
           <Pressable key={f} style={[styles.filterTab, activeFilter === f && styles.filterTabActive]} onPress={() => setActiveFilter(f)}>
@@ -202,6 +207,7 @@ export default function MarketplaceScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#080b14' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#080b14' },
+  pageHeading: { fontSize: 20, fontWeight: '800', color: '#f1f5f9', padding: 16, paddingBottom: 8 },
   filterScroll: { maxHeight: 52, marginTop: 4 },
   filterRow: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
   filterTab: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#111827' },
