@@ -2,9 +2,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Link } from "expo-router";
-import { useAccount, useSendTransaction } from 'wagmi';
-import { useAppKit } from '@reown/appkit-wagmi-react-native';
-import { parseEther } from 'viem';
+import { useActiveAccount, useConnect, useDisconnect, useSendTransaction } from "thirdweb/react";
+import { prepareTransaction, toWei } from "thirdweb";
+import { inAppWallet } from "thirdweb/wallets";
+import { client, polygon } from "../../lib/thirdweb";
 
 interface PokemonItem {
   pokemonId: number;
@@ -134,13 +135,31 @@ function NFTCard({ item, onBuy, isBuying }: { item: PokemonItem; onBuy: (item: P
 }
 
 function WalletButton() {
-  const { open } = useAppKit();
-  const { address, isConnected } = useAccount();
+  const account = useActiveAccount();
+  const { connect, isConnecting } = useConnect();
+  const { disconnect } = useDisconnect();
+
+  async function handleConnect() {
+    await connect(async () => {
+      const wallet = inAppWallet();
+      await wallet.connect({ client, strategy: "google" });
+      return wallet;
+    });
+  }
+
+  if (account) {
+    return (
+      <Pressable style={styles.walletBtn} onPress={() => disconnect(account)}>
+        <Text style={styles.walletBtnText}>
+          {account.address.slice(0, 6)}…{account.address.slice(-4)}
+        </Text>
+      </Pressable>
+    );
+  }
+
   return (
-    <Pressable style={styles.walletBtn} onPress={() => open()}>
-      <Text style={styles.walletBtnText}>
-        {isConnected ? `${address!.slice(0, 6)}…${address!.slice(-4)}` : 'Connect Wallet'}
-      </Text>
+    <Pressable style={styles.walletBtn} onPress={handleConnect} disabled={isConnecting}>
+      <Text style={styles.walletBtnText}>{isConnecting ? 'Connecting...' : 'Connect Wallet'}</Text>
     </Pressable>
   );
 }
@@ -153,9 +172,9 @@ export default function MarketplaceScreen() {
   const [activeFilter, setActiveFilter] = useState('All');
   const [buyingId, setBuyingId] = useState<number | null>(null);
 
-  const { isConnected } = useAccount();
-  const { open } = useAppKit();
-  const { sendTransactionAsync } = useSendTransaction();
+  const account = useActiveAccount();
+  const { connect } = useConnect();
+  const { mutateAsync: sendTransaction } = useSendTransaction();
 
   useEffect(() => { load(0); }, []);
 
@@ -172,13 +191,20 @@ export default function MarketplaceScreen() {
   }
 
   async function handleBuy(item: PokemonItem) {
-    if (!isConnected) {
+    if (!account) {
       Alert.alert(
         'Wallet Required',
         'Connect your wallet to purchase Pokémon NFTs.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Connect Wallet', onPress: () => open() },
+          {
+            text: 'Connect Wallet',
+            onPress: () => connect(async () => {
+              const wallet = inAppWallet();
+              await wallet.connect({ client, strategy: "google" });
+              return wallet;
+            }),
+          },
         ]
       );
       return;
@@ -194,10 +220,13 @@ export default function MarketplaceScreen() {
           onPress: async () => {
             try {
               setBuyingId(item.pokemonId);
-              await sendTransactionAsync({
+              const tx = prepareTransaction({
                 to: MARKETPLACE_WALLET,
-                value: parseEther(item.price),
+                value: toWei(item.price),
+                chain: polygon,
+                client,
               });
+              await sendTransaction(tx);
               await addOwnedId(item.pokemonId);
               Alert.alert('Purchase Successful!', `${item.displayName} has been added to your collection.`);
             } catch (err: any) {
