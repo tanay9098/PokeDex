@@ -11,6 +11,12 @@ const MOCKED_MODULES = [
   '@coinbase/wallet-mobile-sdk',
   '@coinbase/wallet-mobile-sdk/build/WalletMobileSDKEVMProvider',
   '@mobile-wallet-protocol/client',
+  '@aws-sdk/client-kms',
+  '@aws-sdk/client-lambda',
+  '@aws-sdk/credential-providers',
+  'react-native-aes-gcm-crypto',
+  'react-native-passkey',
+  'react-native-quick-crypto',
 ];
 
 const originalResolveRequest = config.resolver.resolveRequest;
