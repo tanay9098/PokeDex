@@ -74,54 +74,56 @@ function NFTCard({ item, onBuy, isBuying }: { item: PokemonItem; onBuy: (item: P
   const rc = RARITY_COLORS[item.rarity];
   const usd = (parseFloat(item.price) * 0.8).toFixed(2);
   return (
-    <Link href={{ pathname: "/detailed", params: { name: item.name } }} asChild>
-      <Pressable style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}>
-        <View style={[styles.cardGlow, { backgroundColor: color }]} />
-        <View style={styles.cardTop}>
-          <View>
-            <Text style={styles.ownerLabel}>Owned by</Text>
-            <Text style={styles.ownerId}>{String(item.pokemonId).padStart(4, '0')}EX</Text>
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.ownerLabel}>Created by</Text>
-            <Text style={styles.ownerId}>{item.pokemonId}API</Text>
-          </View>
-        </View>
-        <Image source={{ uri: item.officialArtworkUrl }} style={styles.artwork} resizeMode="contain" />
-        <View style={styles.cardBottom}>
-          <View style={styles.typesRow}>
-            {item.types.map(t => (
-              <View key={t} style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[t] || '#555' }]}>
-                <Text style={styles.typeText}>{t}</Text>
-              </View>
-            ))}
-            <View style={[styles.rarityBadge, { borderColor: rc }]}>
-              <Text style={[styles.rarityText, { color: rc }]}>{RARITY_LABELS[item.rarity]}</Text>
-            </View>
-          </View>
-          <Text style={styles.pokemonName}>{item.displayName}</Text>
-          <View style={styles.priceRow}>
+    <View style={styles.card}>
+      <Link href={{ pathname: "/detailed", params: { name: item.name } }} asChild>
+        <Pressable style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}>
+          <View style={[styles.cardGlow, { backgroundColor: color }]} />
+          <View style={styles.cardTop}>
             <View>
-              <Text style={styles.priceLabel}>MATIC {item.price} × 1</Text>
-              <Text style={styles.usdLabel}>(${usd})</Text>
+              <Text style={styles.ownerLabel}>Owned by</Text>
+              <Text style={styles.ownerId}>{String(item.pokemonId).padStart(4, '0')}EX</Text>
             </View>
-            <Text style={styles.tokenId}>#{String(item.pokemonId).padStart(4, '0')}</Text>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.ownerLabel}>Created by</Text>
+              <Text style={styles.ownerId}>{item.pokemonId}API</Text>
+            </View>
           </View>
-          <View style={styles.actions}>
-            <Pressable style={styles.btnGhost} onPress={() => {}}>
-              <Text style={styles.btnGhostText}>View History</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.btnPrimary, isBuying && styles.btnDisabled]}
-              onPress={(e) => { e.preventDefault?.(); onBuy(item); }}
-              disabled={isBuying}
-            >
-              <Text style={styles.btnPrimaryText}>{isBuying ? 'Buying...' : 'Buy Now'}</Text>
-            </Pressable>
+          <Image source={{ uri: item.officialArtworkUrl }} style={styles.artwork} resizeMode="contain" />
+          <View style={styles.cardBottom}>
+            <View style={styles.typesRow}>
+              {item.types.map(t => (
+                <View key={t} style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[t] || '#555' }]}>
+                  <Text style={styles.typeText}>{t}</Text>
+                </View>
+              ))}
+              <View style={[styles.rarityBadge, { borderColor: rc }]}>
+                <Text style={[styles.rarityText, { color: rc }]}>{RARITY_LABELS[item.rarity]}</Text>
+              </View>
+            </View>
+            <Text style={styles.pokemonName}>{item.displayName}</Text>
+            <View style={styles.priceRow}>
+              <View>
+                <Text style={styles.priceLabel}>MATIC {item.price} × 1</Text>
+                <Text style={styles.usdLabel}>(${usd})</Text>
+              </View>
+              <Text style={styles.tokenId}>#{String(item.pokemonId).padStart(4, '0')}</Text>
+            </View>
           </View>
-        </View>
-      </Pressable>
-    </Link>
+        </Pressable>
+      </Link>
+      <View style={[styles.actions, { paddingHorizontal: 10, paddingBottom: 10 }]}>
+        <Pressable style={styles.btnGhost} onPress={() => {}}>
+          <Text style={styles.btnGhostText}>View History</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.btnPrimary, isBuying && styles.btnDisabled]}
+          onPress={() => onBuy(item)}
+          disabled={isBuying}
+        >
+          <Text style={styles.btnPrimaryText}>{isBuying ? 'Buying...' : 'Buy Now'}</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -214,7 +216,7 @@ const styles = StyleSheet.create({
   filterTabActive: { backgroundColor: '#6366f1', borderColor: '#6366f1' },
   filterTabText: { color: '#94a3b8', fontSize: 13, fontWeight: '600' },
   filterTabTextActive: { color: '#fff' },
-  grid: { padding: 12, gap: 12 },
+  grid: { padding: 12, gap: 12, paddingBottom: 80 },
   gridRow: { gap: 12 },
   card: { flex: 1, backgroundColor: '#111827', borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', maxWidth: '49%' },
   cardGlow: { position: 'absolute', width: 120, height: 120, borderRadius: 60, opacity: 0.15, top: 20, alignSelf: 'center' } as any,

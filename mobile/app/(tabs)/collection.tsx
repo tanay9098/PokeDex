@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: '#f1f5f9', marginBottom: 8 },
   emptySubtitle: { fontSize: 14, color: '#475569', textAlign: 'center' },
-  grid: { padding: 12, gap: 12 },
+  grid: { padding: 12, gap: 12, paddingBottom: 80 },
   gridRow: { gap: 12 },
   card: { flex: 1, backgroundColor: '#111827', borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', maxWidth: '49%' },
   cardBg: { position: 'absolute', width: 100, height: 100, borderRadius: 50, opacity: 0.12, top: 10, alignSelf: 'center' } as any,

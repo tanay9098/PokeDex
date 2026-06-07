@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
 
@@ -88,6 +88,7 @@ async function fetchMoves(moveList: any[]): Promise<PokemonMove[]> {
 
 export default function DetailScreen() {
   const { name } = useLocalSearchParams<{ name: string }>();
+  const router = useRouter();
   const [pokemon, setPokemon] = useState<PokemonDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -269,7 +270,7 @@ export default function DetailScreen() {
 
       {/* Action buttons */}
       <View style={styles.actions}>
-        <Pressable style={[styles.btnPrimary, { backgroundColor: bgColor }]} onPress={() => alert('Battle coming soon!')}>
+        <Pressable style={[styles.btnPrimary, { backgroundColor: bgColor }]} onPress={() => router.push('/(tabs)/battle')}>
           <Text style={styles.btnPrimaryText}>⚔️ Battle</Text>
         </Pressable>
         <Pressable style={styles.btnSecondary} onPress={() => alert(`Add ${pokemon.displayName} to collection?`)}>
@@ -334,7 +335,7 @@ const styles = StyleSheet.create({
   moveDmgClass: { fontSize: 12, color: '#475569', textTransform: 'capitalize' },
   noData: { color: '#475569', textAlign: 'center', fontSize: 14 },
 
-  actions: { flexDirection: 'row', gap: 12, marginHorizontal: 16, marginTop: 4 },
+  actions: { flexDirection: 'row', gap: 12, marginHorizontal: 16, marginTop: 4, marginBottom: 24 },
   btnPrimary: { flex: 1, padding: 14, borderRadius: 14, alignItems: 'center' },
   btnPrimaryText: { color: '#fff', fontSize: 15, fontWeight: '800' },
   btnSecondary: { flex: 1, padding: 14, borderRadius: 14, alignItems: 'center', backgroundColor: '#111827', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
