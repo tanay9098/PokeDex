@@ -174,7 +174,7 @@ npm run web       # Run in browser
 
 | Contract | Address |
 |---|---|
-| PokemonNFT | `0xc510C064C14B8eF2838d31a64b969c02cf315289` |
+| PokemonNFT | `0xc510C064C14B8eF2838d31a64bF69c02cf315289` |
 | PokemonMarketplace | `0x225E3dB2d27846eef2A5bfBf6202dd37178634A7` |
 
 - **Network:** Polygon Amoy Testnet
