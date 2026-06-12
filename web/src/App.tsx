@@ -13,6 +13,7 @@ import {
   PokemonData,
   PokemonMove,
 } from './utils/pokeapi'
+import MultiplayerBattle from './components/MultiplayerBattle'
 
 type Page = 'home' | 'marketplace' | 'battle' | 'collection'
 
@@ -274,6 +275,7 @@ export default function App() {
   })
   const [battleSelectedItem, setBattleSelectedItem] = useState<PokemonListItem | null>(null)
   const [battleLoading, setBattleLoading] = useState(false)
+  const [battleMode, setBattleMode] = useState<'solo' | 'multi'>('solo')
   const [buyingPokemonId, setBuyingPokemonId] = useState<number | null>(null)
   const [ownedPokemonIds, setOwnedPokemonIds] = useState<Set<number>>(() => {
     try {
@@ -700,9 +702,38 @@ export default function App() {
           {/* BATTLE PAGE */}
           {!loading && page === 'battle' && (
             <div className="battle-page">
-              <div className="page-heading">⚔️ Pokémon Battle Arena</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                <div className="page-heading" style={{ margin: 0 }}>⚔️ Pokémon Battle Arena</div>
+                <div style={{ display: 'flex', background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: 3, marginLeft: 'auto' }}>
+                  <button
+                    onClick={() => setBattleMode('solo')}
+                    style={{
+                      padding: '6px 16px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                      background: battleMode === 'solo' ? 'rgba(99,102,241,0.7)' : 'transparent',
+                      color: battleMode === 'solo' ? '#fff' : 'var(--text-secondary)',
+                    }}
+                  >⚔️ Solo</button>
+                  <button
+                    onClick={() => setBattleMode('multi')}
+                    style={{
+                      padding: '6px 16px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                      background: battleMode === 'multi' ? 'rgba(99,102,241,0.7)' : 'transparent',
+                      color: battleMode === 'multi' ? '#fff' : 'var(--text-secondary)',
+                    }}
+                  >🌐 Multiplayer</button>
+                </div>
+              </div>
 
-              {battleState.phase === 'select' && (
+              {battleMode === 'multi' && (
+                <MultiplayerBattle
+                  pokemons={pokemons}
+                  ownedPokemonIds={ownedPokemonIds}
+                  walletAddress={walletAddress}
+                  onBack={() => setBattleMode('solo')}
+                />
+              )}
+
+              {battleMode === 'solo' && battleState.phase === 'select' && (
                 <div>
                   <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>
                     Select your Pokémon to battle. Your opponent will be chosen randomly.
@@ -746,7 +777,7 @@ export default function App() {
                 </div>
               )}
 
-              {battleState.phase === 'fighting' && battleState.myPokemon && battleState.opponentPokemon && (
+              {battleMode === 'solo' && battleState.phase === 'fighting' && battleState.myPokemon && battleState.opponentPokemon && (
                 <div className="battle-arena">
                   <div className="battle-field">
                     {/* Opponent Zone */}
@@ -843,7 +874,7 @@ export default function App() {
                 </div>
               )}
 
-              {battleState.phase === 'result' && (
+              {battleMode === 'solo' && battleState.phase === 'result' && (
                 <div className="battle-arena">
                   <div className="battle-result">
                     <div className="battle-result-emoji">{battleState.winner === 'player' ? '🏆' : '💀'}</div>
