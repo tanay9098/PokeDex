@@ -4,6 +4,9 @@
 
 A full-stack Pokemon NFT marketplace where you can collect, trade, and battle Pokemon as digital collectibles (NFTs) on the Polygon blockchain. Available as both a web app and android mobile app.
 
+**Detailed Blog:** https://dev.to/tanay_dwivedi9098/pokedex-a-pokemon-based-nft-platform-1352
+**Live app:** https://pokedex9098.netlify.app/
+
 ---
 
 
